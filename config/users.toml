@@ -1,0 +1,71 @@
+# OAuth2 Mock Server User Configuration
+# This file defines users that can authenticate through the OAuth2 mock server
+
+[users.user1]
+login_id = "john.doe"
+[users.user1.claims]
+sub = "user_123"
+name = "John Doe"
+email = "john.doe@example.com"
+email_verified = true
+picture = "https://via.placeholder.com/150"
+given_name = "John"
+family_name = "Doe"
+locale = "en-US"
+zoneinfo = "America/New_York"
+
+[users.user2]
+login_id = "jane.smith"
+[users.user2.claims]
+sub = "user_456"
+name = "Jane Smith"
+email = "jane.smith@example.com"
+email_verified = true
+picture = "https://via.placeholder.com/150"
+given_name = "Jane"
+family_name = "Smith"
+locale = "en-GB"
+zoneinfo = "Europe/London"
+role = "admin"
+department = "Engineering"
+employee_id = "EMP789"
+hire_date = "2023-01-15"
+
+[users.user3]
+login_id = "guest.user"
+[users.user3.claims]
+sub = "user_789"
+name = "Guest User"
+email = "guest@example.com"
+email_verified = false
+role = "guest"
+
+[users.user4]
+login_id = "alice.johnson"
+[users.user4.claims]
+sub = "user_101"
+name = "Alice Johnson"
+email = "alice.johnson@example.com"
+email_verified = true
+picture = "https://via.placeholder.com/150"
+given_name = "Alice"
+family_name = "Johnson"
+locale = "fr-FR"
+zoneinfo = "Europe/Paris"
+role = "manager"
+department = "Marketing"
+employee_id = "EMP202"
+hire_date = "2022-06-01"
+phone_number = "+33-1-23-45-67-89"
+
+[users.user4.claims.address]
+street_address = "123 Rue de la Paix"
+locality = "Paris"
+region = "Île-de-France"
+postal_code = "75001"
+country = "France"
+
+[users.user4.claims.preferences]
+theme = "dark"
+language = "fr"
+notifications = true

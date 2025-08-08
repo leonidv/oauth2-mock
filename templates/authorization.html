@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>OAuth2 Authorization</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 40px; text-align: center; }
+        .container { max-width: 800px; margin: 0 auto; }
+        .code { background: #f0f0f0; padding: 10px; margin: 20px 0; border-radius: 5px; font-family: monospace; }
+        .button { background: #007bff; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block; margin: 10px; }
+        .user-option { background: #f8f9fa; padding: 15px; margin: 10px 0; border-radius: 5px; border-left: 4px solid #007bff; cursor: pointer; transition: background-color 0.2s; }
+        .user-option:hover { background: #e9ecef; }
+        .user-option h4 { margin: 0 0 10px 0; color: #333; }
+        .user-option p { margin: 5px 0; color: #666; }
+        .user-option.selected { background: #d4edda; border-left-color: #28a745; }
+        .authorization-section { margin-top: 30px; padding: 20px; background: #f8f9fa; border-radius: 5px; }
+        .hidden { display: none; }
+    </style>
+    <script>
+        function selectUser(userKey, userName) {
+            // Remove previous selection
+            document.querySelectorAll('.user-option').forEach(option => {
+                option.classList.remove('selected');
+            });
+            
+            // Select current user
+            document.getElementById('user-' + userKey).classList.add('selected');
+            
+            // Show authorization section
+            document.getElementById('authorization-section').classList.remove('hidden');
+            
+            // Update user info
+            document.getElementById('selected-user-name').textContent = userName;
+            
+            // Store selected user for form submission
+            document.getElementById('selected-user-key').value = userKey;
+        }
+        
+                        function authorize() {
+                    const selectedUser = document.getElementById('selected-user-key').value;
+                    if (!selectedUser) {
+                        alert('Please select a user first');
+                        return;
+                    }
+                    
+                    // Redirect to the callback URL with the authorization code and selected user
+                    const redirectUrl = new URL('{{redirect_url}}');
+                    redirectUrl.searchParams.set('selected_user', selectedUser);
+                    window.location.href = redirectUrl.toString();
+                }
+    </script>
+</head>
+<body>
+    <div class="container">
+        <h1>OAuth2 Authorization</h1>
+        <p>Mock authorization server - select a user to continue:</p>
+        
+        <div class="users-list">
+            {{user_options | safe}}
+        </div>
+        
+        <div id="authorization-section" class="authorization-section hidden">
+            <h3>Authorization for: <span id="selected-user-name"></span></h3>
+            <p>Authorization Code: <span class="code">{{authorization_code}}</span></p>
+            <p>This code will be exchanged for an access token.</p>
+            <button onclick="authorize()" class="button">Continue to Application</button>
+            <input type="hidden" id="selected-user-key" value="">
+        </div>
+        
+        <p><small>This is a mock server for testing purposes.</small></p>
+    </div>
+</body>
+</html>

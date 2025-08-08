@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>OAuth2 Mock Server</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 40px; }
+        .endpoint { background: #f5f5f5; padding: 15px; margin: 10px 0; border-radius: 5px; }
+        code { background: #e0e0e0; padding: 2px 4px; border-radius: 3px; }
+        .user-list { margin: 20px 0; }
+        .user-item { background: #f8f9fa; padding: 15px; margin: 10px 0; border-radius: 5px; border-left: 4px solid #007bff; }
+        .user-item h4 { margin: 0 0 10px 0; color: #333; }
+        .user-item p { margin: 5px 0; color: #666; }
+        .user-count { background: #e9ecef; padding: 10px; border-radius: 5px; margin: 20px 0; }
+    </style>
+</head>
+<body>
+    <h1>OAuth2 Mock Server</h1>
+    <p>This is a mock OAuth2 authorization server for testing purposes.</p>
+    
+    <div class="user-count">
+        <h3>Registered Users ({{user_count}})</h3>
+        <p>These users are available for OAuth2 authorization:</p>
+    </div>
+    
+    <div class="user-list">
+        {{user_list | safe}}
+    </div>
+    
+    <h2>Available Endpoints:</h2>
+    
+    <div class="endpoint">
+        <h3>Authorization Endpoint</h3>
+        <p><code>GET /authorize</code></p>
+        <p>Parameters: response_type, client_id, redirect_uri, scope, state, code_challenge, code_challenge_method</p>
+    </div>
+    
+    <div class="endpoint">
+        <h3>Token Endpoint</h3>
+        <p><code>POST /token</code></p>
+        <p>Parameters: grant_type, code, redirect_uri, client_id, client_secret, code_verifier, refresh_token</p>
+    </div>
+    
+    <div class="endpoint">
+        <h3>User Info Endpoint</h3>
+        <p><code>GET /userinfo</code></p>
+        <p>Headers: Authorization: Bearer &lt;access_token&gt;</p>
+    </div>
+    
+    <div class="endpoint">
+        <h3>OpenID Connect Configuration</h3>
+        <p><code>GET /.well-known/openid_configuration</code></p>
+    </div>
+    
+    <h2>Test Client:</h2>
+    <p>You can use any client_id and client_secret for testing. The server accepts all valid OAuth2 flows.</p>
+</body>
+</html>
