@@ -1,3 +1,5 @@
+mod configuration;
+
 use axum::{
     extract::{Form, Query, State},
     http::{HeaderMap, StatusCode},
@@ -12,18 +14,20 @@ use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
 use std::sync::Arc;
-use tera::{Tera, Context};
+use tera::{Context, Tera};
 use tokio::sync::RwLock;
 use tower_http::cors::{Any, CorsLayer};
 use tracing::{info, warn};
 use uuid::Uuid;
+
+use configuration::*;
 
 #[derive(Parser, Debug)]
 #[command(name = "oauth2-mock")]
 #[command(about = "OAuth2 Mock Authorization Server")]
 struct Args {
     /// Path to the TOML configuration file containing user definitions
-    #[arg(short, long, default_value = "config/users.toml")]
+    #[arg(short, long, default_value = "config/users.json")]
     config: String,
 }
 
@@ -92,23 +96,6 @@ struct AccessToken {
     user_key: Option<String>, // Store the user key for lookup
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-struct UserConfig {
-    login_id: String,
-    claims: serde_json::Value,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-struct UserConfiguration {
-    users: HashMap<String, UserConfig>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-struct UserInfo {
-    #[serde(flatten)]
-    claims: serde_json::Value,
-}
-
 #[derive(Debug, Clone)]
 struct AppState {
     authorization_codes: Arc<RwLock<HashMap<String, AuthorizationCode>>>,
@@ -130,22 +117,6 @@ impl AppState {
     }
 }
 
-fn load_user_config(config_path: &str) -> Result<UserConfiguration, Box<dyn std::error::Error>> {
-    if !Path::new(config_path).exists() {
-        warn!("Configuration file not found: {}. Using default configuration.", config_path);
-        return Ok(UserConfiguration {
-            users: HashMap::new(),
-        });
-    }
-
-    let config_content = fs::read_to_string(config_path)?;
-    let user_config: UserConfiguration = toml::from_str(&config_content)?;
-    
-    info!("Loaded {} users from configuration file: {}", user_config.users.len(), config_path);
-    
-    Ok(user_config)
-}
-
 fn load_templates() -> Result<Tera, Box<dyn std::error::Error>> {
     let templates = Tera::new("templates/**/*.html")?;
     info!("Loaded templates from templates/ directory");
@@ -159,13 +130,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Parse command line arguments
     let args = Args::parse();
-    
+
     // Load user configuration
-    let user_config = load_user_config(&args.config)?;
-    
+    let user_config = UserConfiguration::from_file(&args.config)?;
+
     // Load templates
     let templates = load_templates()?;
-    
+
     let state = AppState::new(user_config, templates);
 
     // Configure CORS
@@ -180,7 +151,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route("/authorize", get(authorize))
         .route("/token", post(token))
         .route("/userinfo", get(userinfo))
-        .route("/.well-known/openid_configuration", get(openid_configuration))
+        .route(
+            "/.well-known/openid_configuration",
+            get(openid_configuration),
+        )
         .layer(cors)
         .with_state(state);
 
@@ -198,11 +172,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 async fn home(State(state): State<AppState>) -> Result<Html<String>, StatusCode> {
     let mut context = Context::new();
-    
+
     // Generate user list for the home page
     let user_config = &state.user_config;
     let mut user_list = String::new();
-    
+
     if user_config.users.is_empty() {
         user_list = r#"
             <div class="user-item">
@@ -212,30 +186,32 @@ async fn home(State(state): State<AppState>) -> Result<Html<String>, StatusCode>
         "#.to_string();
     } else {
         for (_user_key, user_config) in &user_config.users {
-            let name = user_config.claims.get("name")
-                .and_then(|v| v.as_str())
-                .unwrap_or(&user_config.login_id);
-            let email = user_config.claims.get("email")
-                .and_then(|v| v.as_str())
-                .unwrap_or("No email");
-            let sub = user_config.claims.get("sub")
-                .and_then(|v| v.as_str())
-                .unwrap_or("Unknown");
-            
-            user_list.push_str(&format!(r#"
+            let name = user_config
+                .user_info
+                .get("name")
+                .unwrap_or(&user_config.login);
+            let e = &"No email".to_string();
+            let email = user_config.user_info.get("email").unwrap_or(e);
+            let s = &"Unknown".to_string();
+            let sub = user_config.user_info.get("sub").unwrap_or(s);
+
+            user_list.push_str(&format!(
+                r#"
                 <div class="user-item">
                     <h4>{}</h4>
                     <p><strong>Login ID:</strong> {}</p>
                     <p><strong>Email:</strong> {}</p>
                     <p><strong>Subject:</strong> {}</p>
                 </div>
-            "#, name, user_config.login_id, email, sub));
+            "#,
+                name, user_config.login, email, sub
+            ));
         }
     }
-    
+
     context.insert("user_count", &user_config.users.len());
     context.insert("user_list", &user_list);
-    
+
     match state.templates.render("home.html", &context) {
         Ok(html) => Ok(Html(html)),
         Err(e) => {
@@ -263,6 +239,8 @@ async fn authorize(
     // Generate authorization code
     let code = Uuid::new_v4().to_string();
     let expires_at = Utc::now() + Duration::minutes(10);
+    
+    let mut user_list = String::new();
 
     // Store the authorization code with selected user (in a real app, this would be in a database)
     let auth_code = AuthorizationCode {
@@ -274,18 +252,22 @@ async fn authorize(
         code_challenge: params.code_challenge.clone(),
         selected_user: params.selected_user.clone(),
     };
-    
+
     {
         let mut codes = state.authorization_codes.write().await;
         codes.insert(code.clone(), auth_code);
     }
-    
-    info!("Generated authorization code: {} for user: {:?}", code, params.selected_user);
+
+    info!(
+        "Generated authorization code: {} for user: {:?}",
+        code, params.selected_user
+    );
 
     // Build redirect URL
-    let mut redirect_url = url::Url::parse(&params.redirect_uri).map_err(|_| StatusCode::BAD_REQUEST)?;
+    let mut redirect_url =
+        url::Url::parse(&params.redirect_uri).map_err(|_| StatusCode::BAD_REQUEST)?;
     redirect_url.query_pairs_mut().append_pair("code", &code);
-    
+
     if let Some(state) = params.state {
         redirect_url.query_pairs_mut().append_pair("state", &state);
     }
@@ -293,49 +275,50 @@ async fn authorize(
     // Generate user selection HTML
     let user_config = &state.user_config;
     let mut user_options = String::new();
-    
+    let mut user_list = String::new();
+
     if user_config.users.is_empty() {
-        user_options = r#"
-            <div class="user-option" id="user-default" onclick="selectUser('default', 'Default Mock User')">
-                <h4>Default Mock User</h4>
-                <p>No users configured. Using default mock user.</p>
-                <p><em>Click to select this user</em></p>
+        user_list = r#"
+            <div class="user-item">
+                <h4>No Users Configured</h4>
+                <p>No users are currently configured. The server will use default mock user data.</p>
             </div>
         "#.to_string();
+        Ok(Html(user_list))
     } else {
-        for (user_key, user_config) in &user_config.users {
-            let name = user_config.claims.get("name")
-                .and_then(|v| v.as_str())
-                .unwrap_or(&user_config.login_id);
-            let email = user_config.claims.get("email")
-                .and_then(|v| v.as_str())
-                .unwrap_or("No email");
-            let sub = user_config.claims.get("sub")
-                .and_then(|v| v.as_str())
-                .unwrap_or("Unknown");
-            
-            user_options.push_str(&format!(r#"
-                <div class="user-option" id="user-{}" onclick="selectUser('{}', '{}')">
+        for (_user_key, user_config) in &user_config.users {
+            let name = user_config
+                .user_info
+                .get("name")
+                .unwrap_or(&user_config.login);
+            let e = &"No email".to_string();
+            let email = user_config.user_info.get("email").unwrap_or(e);
+            let s = &"Unknown".to_string();
+            let sub = user_config.user_info.get("sub").unwrap_or(s);
+
+            user_list.push_str(&format!(
+                r#"
+                <div class="user-item">
                     <h4>{}</h4>
                     <p><strong>Login ID:</strong> {}</p>
                     <p><strong>Email:</strong> {}</p>
                     <p><strong>Subject:</strong> {}</p>
-                    <p><em>Click to select this user</em></p>
                 </div>
-            "#, user_key, user_key, name, name, user_config.login_id, email, sub));
+            "#,
+                name, user_config.login, email, sub
+            ));
         }
-    }
+        let mut context = Context::new();
+        context.insert("user_options", &user_options);
+        context.insert("authorization_code", &code);
+        context.insert("redirect_url", &redirect_url.as_str());
 
-    let mut context = Context::new();
-    context.insert("user_options", &user_options);
-    context.insert("authorization_code", &code);
-    context.insert("redirect_url", &redirect_url.as_str());
-    
-    match state.templates.render("authorization.html", &context) {
-        Ok(html) => Ok(Html(html)),
-        Err(e) => {
-            warn!("Failed to render authorization template: {}", e);
-            Err(StatusCode::INTERNAL_SERVER_ERROR)
+        match state.templates.render("authorization.html", &context) {
+            Ok(html) => Ok(Html(html)),
+            Err(e) => {
+                warn!("Failed to render authorization template: {}", e);
+                Err(StatusCode::INTERNAL_SERVER_ERROR)
+            }
         }
     }
 }
@@ -351,7 +334,7 @@ async fn token(
         "authorization_code" => {
             // Handle authorization code flow
             let code = token_request.code.ok_or(StatusCode::BAD_REQUEST)?;
-            
+
             // Retrieve the authorization code to get the selected user
             let selected_user = {
                 let codes = state.authorization_codes.read().await;
@@ -361,28 +344,30 @@ async fn token(
                     None
                 }
             };
-            
+
             // In a real implementation, you would validate the code against stored codes
             // For this mock, we'll accept any code and generate a new token
-            
+
             let access_token = Uuid::new_v4().to_string();
             let refresh_token = Uuid::new_v4().to_string();
-            
+
             // Store the access token (in a real app, this would be in a database)
             let access_token_data = AccessToken {
                 token: access_token.clone(),
-                client_id: token_request.client_id.unwrap_or_else(|| "mock_client".to_string()),
+                client_id: token_request
+                    .client_id
+                    .unwrap_or_else(|| "mock_client".to_string()),
                 scope: token_request.redirect_uri.map(|_| "read write".to_string()),
                 expires_at: Utc::now() + Duration::hours(1),
                 user_id: "mock_user".to_string(),
                 user_key: selected_user,
             };
-            
+
             {
                 let mut tokens = state.access_tokens.write().await;
                 tokens.insert(access_token.clone(), access_token_data);
             }
-            
+
             {
                 let mut refresh_tokens = state.refresh_tokens.write().await;
                 refresh_tokens.insert(refresh_token.clone(), access_token.clone());
@@ -399,21 +384,23 @@ async fn token(
         "refresh_token" => {
             // Handle refresh token flow
             let _refresh_token = token_request.refresh_token.ok_or(StatusCode::BAD_REQUEST)?;
-            
+
             // In a real implementation, you would validate the refresh token
             // For this mock, we'll generate a new access token
-            
+
             let access_token = Uuid::new_v4().to_string();
-            
+
             let access_token_data = AccessToken {
                 token: access_token.clone(),
-                client_id: token_request.client_id.unwrap_or_else(|| "mock_client".to_string()),
+                client_id: token_request
+                    .client_id
+                    .unwrap_or_else(|| "mock_client".to_string()),
                 scope: Some("read write".to_string()),
                 expires_at: Utc::now() + Duration::hours(1),
                 user_id: "mock_user".to_string(),
                 user_key: None, // For now, we'll use the first user
             };
-            
+
             {
                 let mut tokens = state.access_tokens.write().await;
                 tokens.insert(access_token.clone(), access_token_data);
@@ -434,7 +421,7 @@ async fn token(
 async fn userinfo(
     State(state): State<AppState>,
     headers: HeaderMap,
-) -> Result<Json<UserInfo>, StatusCode> {
+) -> Result<Json<User>, StatusCode> {
     // Extract Bearer token from Authorization header
     let auth_header = headers
         .get("authorization")
@@ -446,13 +433,13 @@ async fn userinfo(
     }
 
     let token = &auth_header[7..]; // Remove "Bearer " prefix
-    
+
     info!("User info request for token: {}", token);
 
     // In a real implementation, you would validate the token and look up the user
     // For this mock, we'll return the first user from configuration or a default
     let user_config = &state.user_config;
-    
+
     // Try to find the token in our storage to get the user_key
     let access_tokens = state.access_tokens.read().await;
     let user_key = if let Some(access_token) = access_tokens.get(token) {
@@ -461,22 +448,18 @@ async fn userinfo(
         None
     };
     drop(access_tokens); // Release the lock
-    
+
     // If we have a user_key, try to find that user
     if let Some(user_key) = user_key {
-        if let Some(user_config) = user_config.users.get(&user_key) {
-            return Ok(Json(UserInfo {
-                claims: user_config.claims.clone(),
-            }));
+        if let Some(user) = user_config.users.get(&user_key) {
+            return Ok(Json(user.clone()));
         }
     }
-    
+
     // Fallback to first user or default
-    if let Some((_, user_config)) = user_config.users.iter().next() {
+    if let Some((_, user)) = user_config.users.iter().next() {
         // Return the first configured user's claims
-        Ok(Json(UserInfo {
-            claims: user_config.claims.clone(),
-        }))
+        Ok(Json(user.clone()))
     } else {
         // Return default claims if no users are configured
         let default_claims = serde_json::json!({
@@ -486,9 +469,11 @@ async fn userinfo(
             "email_verified": true,
             "picture": "https://via.placeholder.com/150"
         });
-        
-        Ok(Json(UserInfo {
-            claims: default_claims,
+
+        Ok(Json(User {
+            login: "???".to_string(),
+            description: "???".to_string(),
+            user_info: HashMap::new(),
         }))
     }
 }
@@ -510,4 +495,3 @@ async fn openid_configuration() -> Json<serde_json::Value> {
 
     Json(config)
 }
-

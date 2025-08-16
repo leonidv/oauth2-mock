@@ -1,0 +1,28 @@
+{
+  "users": [
+    {
+      "login": "Admin",
+      "description": "Administrator of system",
+      "userInfo": {
+        "login": "admin",
+        "id": "1",
+        "first_name": "Michael",
+        "last_name": "Johnson",
+        "display_name": "Admin MJ",
+        "default_email": "admin@company.com"
+      }
+    },
+    {
+      "login": "Manager",
+      "description": "Manager works with orders",
+      "userInfo": {
+        "login": "admin",
+        "id": "2",
+        "first_name": "Sarah",
+        "last_name": "Davis",
+        "display_name": "Manager SD",
+        "default_email": "manager@company.com"
+      }
+    }
+  ]
+}
