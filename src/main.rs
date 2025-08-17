@@ -11,8 +11,6 @@ use chrono::{Duration, Utc};
 use clap::Parser;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::fs;
-use std::path::Path;
 use std::sync::Arc;
 use tera::{Context, Tera};
 use tokio::sync::RwLock;
