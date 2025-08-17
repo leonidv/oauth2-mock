@@ -23,7 +23,7 @@ pub struct User {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct JsonConfiguration {
+struct JsonConfiguration {
     pub users: Vec<User>,
 }
 

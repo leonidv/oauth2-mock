@@ -3,29 +3,36 @@
 <head>
     <title>OAuth2 Mock Server</title>
     <style>
-        body { font-family: Arial, sans-serif; margin: 40px; }
+        body { font-family: sans-serif; font-size: 14pt; margin: 40px; }
         .endpoint { background: #f5f5f5; padding: 15px; margin: 10px 0; border-radius: 5px; }
         code { background: #e0e0e0; padding: 2px 4px; border-radius: 3px; }
         .user-list { margin: 20px 0; }
-        .user-item { background: #f8f9fa; padding: 15px; margin: 10px 0; border-radius: 5px; border-left: 4px solid #007bff; }
+        .user-item { background: #f8f9fa; padding: 15px; margin: 15px 0; border-radius: 5px; border-left: 4px solid #007bff; }
         .user-item h4 { margin: 0 0 10px 0; color: #333; }
         .user-item p { margin: 5px 0; color: #666; }
-        .user-count { background: #e9ecef; padding: 10px; border-radius: 5px; margin: 20px 0; }
     </style>
 </head>
 <body>
     <h1>OAuth2 Mock Server</h1>
-    <p>This is a mock OAuth2 authorization server for testing purposes.</p>
-    
-    <div class="user-count">
-        <h3>Registered Users ({{user_count}})</h3>
-        <p>These users are available for OAuth2 authorization:</p>
+    <div>This is a mock OAuth2 authorization server for testing purposes.</div>
+    <div>After authorization you will be redirected to 
+        <div class="endpoint">{{redirect_uri}} </div>  
     </div>
     
+    <h3>These users are available for OAuth2 authorization:</h2>
     <div class="user-list">
-        {{user_list | safe}}
+        {{#each users}} 
+        <div class="user-item">
+                    <h3><a href="/authorize?login={{login}}&{{../auth_params}}">{{login}}</a></a></h4>
+                    <p>{{description}}</p>
+                </div>
+        {{/each}}
     </div>
-    
+
+    <h2>Test Client:</h2>
+    <p>You can use any client_id and client_secret for testing. The server accepts all valid OAuth2 flows.</p>
+
+
     <h2>Available Endpoints:</h2>
     
     <div class="endpoint">
@@ -51,7 +58,5 @@
         <p><code>GET /.well-known/openid_configuration</code></p>
     </div>
     
-    <h2>Test Client:</h2>
-    <p>You can use any client_id and client_secret for testing. The server accepts all valid OAuth2 flows.</p>
 </body>
 </html>

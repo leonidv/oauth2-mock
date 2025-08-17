@@ -1,24 +1,21 @@
 mod configuration;
+mod templates;
 
 use axum::{
-    extract::{Form, Query, State},
-    http::{HeaderMap, StatusCode},
-    response::{Html, Json},
-    routing::{get, post},
-    Router,
+    body::Body, extract::{Form, Query, State}, http::{HeaderMap, StatusCode}, response::{Html, IntoResponse, Json, Response}, routing::{get, post}, Router
 };
 use chrono::{Duration, Utc};
 use clap::Parser;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
-use tera::{Context, Tera};
 use tokio::sync::RwLock;
 use tower_http::cors::{Any, CorsLayer};
 use tracing::{info, warn};
 use uuid::Uuid;
 
 use configuration::*;
+use templates::Templates;
 
 #[derive(Parser, Debug)]
 #[command(name = "oauth2-mock")]
@@ -36,9 +33,7 @@ struct AuthorizationRequest {
     redirect_uri: String,
     scope: Option<String>,
     state: Option<String>,
-    code_challenge: Option<String>,
-    code_challenge_method: Option<String>,
-    selected_user: Option<String>, // Store the selected user key
+    login: Option<String>, // Store the selected user key
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -80,8 +75,7 @@ struct AuthorizationCode {
     redirect_uri: String,
     scope: Option<String>,
     expires_at: chrono::DateTime<Utc>,
-    code_challenge: Option<String>,
-    selected_user: Option<String>, // Store the selected user key
+    user : User,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -100,11 +94,11 @@ struct AppState {
     access_tokens: Arc<RwLock<HashMap<String, AccessToken>>>,
     refresh_tokens: Arc<RwLock<HashMap<String, String>>>,
     user_config: Arc<UserConfiguration>,
-    templates: Arc<Tera>,
+    templates: Arc<Templates>,
 }
 
 impl AppState {
-    fn new(user_config: UserConfiguration, templates: Tera) -> Self {
+    fn new(user_config: UserConfiguration, templates: Templates) -> Self {
         Self {
             authorization_codes: Arc::new(RwLock::new(HashMap::new())),
             access_tokens: Arc::new(RwLock::new(HashMap::new())),
@@ -113,12 +107,6 @@ impl AppState {
             templates: Arc::new(templates),
         }
     }
-}
-
-fn load_templates() -> Result<Tera, Box<dyn std::error::Error>> {
-    let templates = Tera::new("templates/**/*.html")?;
-    info!("Loaded templates from templates/ directory");
-    Ok(templates)
 }
 
 #[tokio::main]
@@ -133,15 +121,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let user_config = UserConfiguration::from_file(&args.config)?;
 
     // Load templates
-    let templates = load_templates()?;
+    let templates = Templates::load();
 
     let state = AppState::new(user_config, templates);
-
-    // Configure CORS
-    let cors = CorsLayer::new()
-        .allow_origin(Any)
-        .allow_methods(Any)
-        .allow_headers(Any);
 
     // Build our application with a route
     let app = Router::new()
@@ -153,7 +135,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             "/.well-known/openid_configuration",
             get(openid_configuration),
         )
-        .layer(cors)
         .with_state(state);
 
     let listener = tokio::net::TcpListener::bind("127.0.0.1:3000").await?;
@@ -168,157 +149,90 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-async fn home(State(state): State<AppState>) -> Result<Html<String>, StatusCode> {
-    let mut context = Context::new();
+async fn home(
+    State(state): State<AppState>,
+    Query(params): Query<AuthorizationRequest>,
+) -> Result<Html<String>, StatusCode> {
+    let templates = &state.templates;
 
-    // Generate user list for the home page
-    let user_config = &state.user_config;
-    let mut user_list = String::new();
+    let html = templates.render_home(state.user_config.as_ref(), &params);
 
-    if user_config.users.is_empty() {
-        user_list = r#"
-            <div class="user-item">
-                <h4>No Users Configured</h4>
-                <p>No users are currently configured. The server will use default mock user data.</p>
-            </div>
-        "#.to_string();
-    } else {
-        for (_user_key, user_config) in &user_config.users {
-            let name = user_config
-                .user_info
-                .get("name")
-                .unwrap_or(&user_config.login);
-            let e = &"No email".to_string();
-            let email = user_config.user_info.get("email").unwrap_or(e);
-            let s = &"Unknown".to_string();
-            let sub = user_config.user_info.get("sub").unwrap_or(s);
-
-            user_list.push_str(&format!(
-                r#"
-                <div class="user-item">
-                    <h4>{}</h4>
-                    <p><strong>Login ID:</strong> {}</p>
-                    <p><strong>Email:</strong> {}</p>
-                    <p><strong>Subject:</strong> {}</p>
-                </div>
-            "#,
-                name, user_config.login, email, sub
-            ));
-        }
-    }
-
-    context.insert("user_count", &user_config.users.len());
-    context.insert("user_list", &user_list);
-
-    match state.templates.render("home.html", &context) {
-        Ok(html) => Ok(Html(html)),
-        Err(e) => {
-            warn!("Failed to render home template: {}", e);
-            Err(StatusCode::INTERNAL_SERVER_ERROR)
-        }
-    }
+    Ok(Html(html))
 }
 
 async fn authorize(
     State(state): State<AppState>,
     Query(params): Query<AuthorizationRequest>,
-) -> Result<Html<String>, StatusCode> {
+) -> Response {
+
     info!("Authorization request: {:?}", params);
+
+    if params.client_id.is_empty() {
+        let msg = format!("client_id is required and can't be empty string");
+        warn!(msg);
+        return (StatusCode::BAD_REQUEST,msg).into_response();
+    }
+
+
+    if params.redirect_uri.is_empty() {
+        let msg = format!("redirect_uri is required and can't be empty string");
+        warn!(msg);
+        return (StatusCode::BAD_REQUEST,msg).into_response();
+    }
+
+    let redirect_uri = params.redirect_uri;
+
+    let parsed_redirect_uri = url::Url::parse(&redirect_uri);
+    if parsed_redirect_uri.is_err() {
+        let msg = format!("Invalid redirect_uri: {}. Redirect URLs must be valid URLs.",redirect_uri);
+        warn!(msg);
+        return (StatusCode::BAD_REQUEST,msg).into_response();
+    }
+    let mut parsed_redirect_uri = parsed_redirect_uri.unwrap();
+
+
+    let response_302 = Response::builder()
+        .status(StatusCode::FOUND);
 
     // Validate required parameters
     if params.response_type != "code" {
-        return Err(StatusCode::BAD_REQUEST);
+        let redirect_uri = format!("{}?error=unsupported_response_type", redirect_uri);
+        let msg = format!("Invalid response_type: {}. Only code is allowed", params.response_type);
+        warn!(msg);
+        return response_302
+                .header("Location", redirect_uri)
+                .body(Body::from(msg)).unwrap();
     }
 
-    if params.client_id.is_empty() || params.redirect_uri.is_empty() {
-        return Err(StatusCode::BAD_REQUEST);
+    if params.login.clone().unwrap_or("".to_string()).is_empty() {
+        let redirect_uri = format!("{}?error=invalid_request", redirect_uri);
+        let msg =  "login is required and can't be empty string".to_string();
+        return response_302
+                .header("Location", redirect_uri)
+                .body(Body::from(msg)).unwrap();
     }
 
-    // Generate authorization code
-    let code = Uuid::new_v4().to_string();
-    let expires_at = Utc::now() + Duration::minutes(10);
-    
-    let mut user_list = String::new();
-
-    // Store the authorization code with selected user (in a real app, this would be in a database)
-    let auth_code = AuthorizationCode {
-        code: code.clone(),
-        client_id: params.client_id.clone(),
-        redirect_uri: params.redirect_uri.clone(),
-        scope: params.scope.clone(),
-        expires_at,
-        code_challenge: params.code_challenge.clone(),
-        selected_user: params.selected_user.clone(),
-    };
-
-    {
-        let mut codes = state.authorization_codes.write().await;
-        codes.insert(code.clone(), auth_code);
+    let login = params.login.unwrap();
+    if !state.user_config.users.contains_key(login.as_str()) {
+        let redirect_uri = format!("{}?error=access_denied",redirect_uri);
+        let msg = format!("User {} not found", login);
+        warn!(msg);
+        return response_302
+                .header("Location", redirect_uri)
+                .body(Body::from(msg)).unwrap();
     }
 
-    info!(
-        "Generated authorization code: {} for user: {:?}",
-        code, params.selected_user
-    );
-
-    // Build redirect URL
-    let mut redirect_url =
-        url::Url::parse(&params.redirect_uri).map_err(|_| StatusCode::BAD_REQUEST)?;
-    redirect_url.query_pairs_mut().append_pair("code", &code);
+    parsed_redirect_uri.query_pairs_mut().append_pair("code", &login);
 
     if let Some(state) = params.state {
-        redirect_url.query_pairs_mut().append_pair("state", &state);
+        parsed_redirect_uri.query_pairs_mut().append_pair("state", &state);
     }
 
-    // Generate user selection HTML
-    let user_config = &state.user_config;
-    let mut user_options = String::new();
-    let mut user_list = String::new();
-
-    if user_config.users.is_empty() {
-        user_list = r#"
-            <div class="user-item">
-                <h4>No Users Configured</h4>
-                <p>No users are currently configured. The server will use default mock user data.</p>
-            </div>
-        "#.to_string();
-        Ok(Html(user_list))
-    } else {
-        for (_user_key, user_config) in &user_config.users {
-            let name = user_config
-                .user_info
-                .get("name")
-                .unwrap_or(&user_config.login);
-            let e = &"No email".to_string();
-            let email = user_config.user_info.get("email").unwrap_or(e);
-            let s = &"Unknown".to_string();
-            let sub = user_config.user_info.get("sub").unwrap_or(s);
-
-            user_list.push_str(&format!(
-                r#"
-                <div class="user-item">
-                    <h4>{}</h4>
-                    <p><strong>Login ID:</strong> {}</p>
-                    <p><strong>Email:</strong> {}</p>
-                    <p><strong>Subject:</strong> {}</p>
-                </div>
-            "#,
-                name, user_config.login, email, sub
-            ));
-        }
-        let mut context = Context::new();
-        context.insert("user_options", &user_options);
-        context.insert("authorization_code", &code);
-        context.insert("redirect_url", &redirect_url.as_str());
-
-        match state.templates.render("authorization.html", &context) {
-            Ok(html) => Ok(Html(html)),
-            Err(e) => {
-                warn!("Failed to render authorization template: {}", e);
-                Err(StatusCode::INTERNAL_SERVER_ERROR)
-            }
-        }
-    }
+    response_302
+        .header("Location", parsed_redirect_uri.to_string())
+        .body(Body::empty())
+        .unwrap()
+ 
 }
 
 async fn token(
@@ -337,7 +251,7 @@ async fn token(
             let selected_user = {
                 let codes = state.authorization_codes.read().await;
                 if let Some(auth_code) = codes.get(&code) {
-                    auth_code.selected_user.clone()
+                    Some(auth_code.user.clone())
                 } else {
                     None
                 }
@@ -358,7 +272,7 @@ async fn token(
                 scope: token_request.redirect_uri.map(|_| "read write".to_string()),
                 expires_at: Utc::now() + Duration::hours(1),
                 user_id: "mock_user".to_string(),
-                user_key: selected_user,
+                user_key: selected_user.map(|u| u.login),
             };
 
             {
