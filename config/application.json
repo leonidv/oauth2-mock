@@ -1,4 +1,7 @@
 {
+  "oauth2": {
+    "authorization_header_prefix": "Bearer"
+  },
   "users": [
     {
       "login": "Admin",

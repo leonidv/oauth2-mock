@@ -1,9 +1,30 @@
 @url=http://localhost:3000
-# GET
-{{url}}/authorize
+
+###
+# Get authorization code by user's login
+GET {{url}}/authorize
     ?login=Admin
     &response_type=code
     &client_id=123
     &redirect_uri=http://localhost:8080
     &state=456
 
+
+###
+# Get access token by authorization code
+POST {{url}}/access_token
+Content-Type: application/x-www-form-urlencoded
+
+grant_type=authorization_code
+&code=4d3e3a29-40a0-4db1-8141-36e339cebec2
+&redirect_uri=http://localhost:8080
+&client_id=xxx
+
+###
+# Load user info
+GET {{url}}/user_info
+Authorization: Bearer 7cf1f752-33a8-4709-a1c4-306821b6efa8
+
+#######################
+
+&state=456

@@ -2,7 +2,7 @@ use handlebars::Handlebars;
 use rust_embed::Embed;
 use serde::Serialize;
 
-use crate::{configuration::{self, User, UserConfiguration}, AuthorizationRequest};
+use crate::{configuration::{self, User, RegisteredUsers}, AuthorizationCodeRequest};
 
 #[derive(Embed)]
 #[folder = "templates/"]
@@ -28,8 +28,8 @@ impl Templates {
         Self { handlebars }
     }
 
-    pub fn render_home(&self, configuration : &UserConfiguration, auth_request : &AuthorizationRequest) -> String {
-        let mut users =  Vec::from_iter(configuration.users.values().map(|v| v.clone()));
+    pub fn render_home(&self, users : &RegisteredUsers, auth_request : &AuthorizationCodeRequest) -> String {
+        let mut users =  Vec::from_iter(users.all().iter().map(|v| v.clone()));
         users.sort_by(|a,b| a.login.cmp(&b.login));
         let auth_params = format!("response_type={}&client_id={}&redirect_uri={}{}{}", 
             auth_request.response_type,
