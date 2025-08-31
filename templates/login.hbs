@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link href="https://fonts.googleapis.com/css2?family=Roboto&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/style.css">
+
+    <title>OAuth2 Mock Server Login page</title>
+</head>
+
+<body>
+    <div class="container">
+        <h1>OAuth2 Mock Server</h1>
+        <div class="callout warning">This is a mock OAuth2 authorization server <strong>only</strong>
+            for testing purposes.</div>
+            
+        <div>After an authorization you will be redirected to
+            <div class="endpoint">{{redirect_uri}} </div>
+        </div>
+
+        <div class="user-list">
+            {{#each users}}
+            <div class="user-item">
+                <h3><a href="/authorize?login={{login}}&{{../auth_params}}">{{login}}</a></a></h4>
+                    <p>{{description}}</p>
+            </div>
+            {{/each}}
+        </div>
+    </div>
+</body>
+
+</html>

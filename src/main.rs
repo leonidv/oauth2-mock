@@ -5,17 +5,15 @@ use axum::{
     Router,
     body::Body,
     extract::{Form, Query, State},
-    http::{HeaderMap, StatusCode},
+    http::{HeaderMap, StatusCode, header},
     response::{Html, IntoResponse, Json, Response},
     routing::{get, post},
 };
-use chrono::{Duration, Utc};
-use clap::{Parser, builder::Str};
+use chrono::Utc;
+use clap::Parser;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
-use tokio::sync::RwLock;
-use tower_http::cors::{Any, CorsLayer};
 use tracing::{info, warn};
 use uuid::Uuid;
 
@@ -27,18 +25,18 @@ use templates::Templates;
 #[command(about = "OAuth2 Mock Authorization Server")]
 struct Args {
     /// Path to the TOML configuration file containing user definitions
-    #[arg(short, long, default_value = "config/application.json")]
-    config: String,
+    #[arg(short, long)]
+    config: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct AuthorizationCodeRequest {
+    login: String, // Store the selected user key
     response_type: String,
     client_id: String,
     redirect_uri: String,
     scope: Option<String>,
     state: Option<String>,
-    login: Option<String>, // Store the selected user key
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -139,8 +137,8 @@ fn link_access_token_with_user(
 }
 
 impl AppState {
-    fn new(app_config: ApplicationConfiguration, templates: Templates) -> Self {
-        let users = RegisteredUsers::new(app_config.users);
+    fn new(app_config: &ApplicationConfiguration, templates: Templates) -> Self {
+        let users = RegisteredUsers::new(&app_config.users);
         let authorization_codes = make_uuids_per_key(&users.logins());
 
         let codes: Vec<String> = authorization_codes
@@ -172,40 +170,61 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Parse command line arguments
     let args = Args::parse();
 
-    // Load user configuration
-    let app_config = ApplicationConfiguration::from_file(&args.config)?;
+    let app_config = match &args.config {
+        Some(path) => match ApplicationConfiguration::from_file(path) {
+            Ok(config) => config,
+            Err(e) => {
+                info!("Failed to load configuration: {}", e);
+                std::process::exit(1);
+            }
+        },
+        None => ApplicationConfiguration::default(),
+    };
 
     // Load templates
     let templates = Templates::load();
 
-    let state = AppState::new(app_config, templates);
+    let state = AppState::new(&app_config, templates);
 
     // Build our application with a route
     let app = Router::new()
         .route("/", get(home))
+        .route("/login", get(login))
         .route("/authorize", get(authorize))
         .route("/access_token", post(access_token))
         .route("/user_info", get(userinfo))
+        .route("/style.css", get(css_styles))
         .with_state(state);
 
-    let listener = tokio::net::TcpListener::bind("127.0.0.1:3000").await?;
-    info!("OAuth2 Mock Server listening on http://127.0.0.1:3000");
-    info!("Available endpoints:");
-    info!("  - GET  /authorize - Authorization endpoint");
-    info!("  - POST /access_token - Token endpoint");
-    info!("  - GET  /user_info - User info endpoint");
-
+    let server_address = app_config.server_address();
+    let listener = tokio::net::TcpListener::bind(&server_address).await?;
+    info!(
+        "OAuth2 Mock Server listening on http://{}:{}",
+        &server_address.0, &server_address.1
+    );
+    info!("Registered users:");
+    app_config.users.iter().for_each(|u| {
+        info!("  -- {} ({})", u.login, u.description);
+    });
     axum::serve(listener, app).await?;
     Ok(())
 }
 
-async fn home(
+async fn home(State(state): State<AppState>) -> Result<Html<String>, StatusCode> {
+    let templates = &state.templates;
+
+    let html = templates.render_home(&state.users);
+
+    Ok(Html(html))
+}
+
+async fn login(
     State(state): State<AppState>,
     Query(params): Query<AuthorizationCodeRequest>,
 ) -> Result<Html<String>, StatusCode> {
     let templates = &state.templates;
 
-    let html = templates.render_home(state.users.as_ref(), &params);
+    let html = templates.render_login(state.users.as_ref(), &params);
 
     Ok(Html(html))
 }
@@ -260,7 +279,7 @@ async fn authorize(
             .unwrap();
     }
 
-    if params.login.clone().unwrap_or("".to_string()).is_empty() {
+    if params.login.is_empty() {
         let redirect_uri = format!("{}?error=invalid_request", redirect_uri);
         let msg = "login is required and can't be empty string".to_string();
         return response_302
@@ -269,7 +288,7 @@ async fn authorize(
             .unwrap();
     }
 
-    let login = params.login.unwrap();
+    let login = params.login;
     if !state.users.contains_login(&login) {
         let redirect_uri = format!("{}?error=access_denied", redirect_uri);
         let msg = format!("User {} not found", login);
@@ -338,7 +357,7 @@ async fn access_token(
 }
 
 async fn userinfo(State(state): State<AppState>, headers: HeaderMap) -> Response {
-    let header_prefix = format!("{} ",&state.authorization_header_prefix).to_string();
+    let header_prefix = format!("{} ", &state.authorization_header_prefix).to_string();
 
     // Extract Bearer token from Authorization header
     if !headers.contains_key("authorization") {
@@ -355,14 +374,14 @@ async fn userinfo(State(state): State<AppState>, headers: HeaderMap) -> Response
 
     if !auth_header.starts_with(&header_prefix) {
         let msg = format!(
-            "Authorization header must starts with '{}'. 
+            "Authorization header must starts with '{}'.
              You can change prefix in the application config",
             header_prefix
         );
         return (StatusCode::BAD_REQUEST, msg).into_response();
     }
 
-    let token = &auth_header[header_prefix.len()..]  ; // Remove "Bearer " prefix
+    let token = &auth_header[header_prefix.len()..]; // Remove "Bearer " prefix
 
     info!("User info request for token: {}", token);
 
@@ -373,4 +392,14 @@ async fn userinfo(State(state): State<AppState>, headers: HeaderMap) -> Response
 
     let user_info = &state.users_info.get(token).unwrap().user_info;
     return (StatusCode::OK, Json(user_info)).into_response();
+}
+
+async fn css_styles(State(state): State<AppState>) -> Response {
+    let templates = &state.templates;
+    return (
+        StatusCode::OK,
+        [(header::CONTENT_TYPE, "text/css")],
+        templates.css().to_string(),
+    )
+        .into_response();
 }

@@ -1,10 +1,14 @@
 {
+  "server": {
+    "host": "0.0.0.0",
+    "port": 3000
+  },
   "oauth2": {
     "authorization_header_prefix": "Bearer"
   },
   "users": [
     {
-      "login": "Admin",
+      "login": "admin",
       "description": "Administrator of system",
       "userInfo": {
         "login": "admin",
@@ -16,10 +20,10 @@
       }
     },
     {
-      "login": "Manager",
+      "login": "manager",
       "description": "Manager works with orders",
       "userInfo": {
-        "login": "admin",
+        "login": "manager",
         "id": "2",
         "first_name": "Sarah",
         "last_name": "Davis",

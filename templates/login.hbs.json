@@ -1,0 +1,14 @@
+{
+    "redirect_uri": "https://localhost:8080/login/oauth2/code/oauthmock",
+    "auth_params": "response_type=code&client_id=f4f6730e459a4b9fb62a6e509ebea840&scope=login:email%20login:info&state=jEs54BPR5F3Ry1drzOh3DI6rh4VHc3zoRojH-_aZatg%3D&redirect_uri=https://localhost:8080/login/oauth2/code/oauthmock",
+    "users": [
+        {
+            "login":"Admin",
+            "description":"Administrator of system"
+        },
+        {
+            "login":"Manager",
+            "description":"Manager works with orders"
+        }        
+    ]
+}

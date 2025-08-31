@@ -1,62 +1,74 @@
 <!DOCTYPE html>
 <html>
+
 <head>
     <title>OAuth2 Mock Server</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link href="https://fonts.googleapis.com/css2?family=Roboto&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/style.css">
+
     <style>
-        body { font-family: sans-serif; font-size: 14pt; margin: 40px; }
-        .endpoint { background: #f5f5f5; padding: 15px; margin: 10px 0; border-radius: 5px; }
-        code { background: #e0e0e0; padding: 2px 4px; border-radius: 3px; }
-        .user-list { margin: 20px 0; }
-        .user-item { background: #f8f9fa; padding: 15px; margin: 15px 0; border-radius: 5px; border-left: 4px solid #007bff; }
-        .user-item h4 { margin: 0 0 10px 0; color: #333; }
-        .user-item p { margin: 5px 0; color: #666; }
+
     </style>
 </head>
+
 <body>
-    <h1>OAuth2 Mock Server</h1>
-    <div>This is a mock OAuth2 authorization server for testing purposes.</div>
-    <div>After authorization you will be redirected to 
-        <div class="endpoint">{{redirect_uri}} </div>  
-    </div>
-    
-    <h3>These users are available for OAuth2 authorization:</h2>
-    <div class="user-list">
-        {{#each users}} 
-        <div class="user-item">
-                    <h3><a href="/authorize?login={{login}}&{{../auth_params}}">{{login}}</a></a></h4>
-                    <p>{{description}}</p>
-                </div>
-        {{/each}}
-    </div>
+    <div class="container">
+        <h1>OAuth2 Mock Server</h1>
+        <div class="callout warning">This is a mock OAuth2 authorization server <strong>only</strong>
+            for testing purposes.</div>
 
-    <h2>Test Client:</h2>
-    <p>You can use any client_id and client_secret for testing. The server accepts all valid OAuth2 flows.</p>
+        <h2>Users from the configuration</h2>
+
+        <table class="users-table">
+            <thead>
+                <th>Login</th>
+                <th>Description</th>
+            </thead>
+            <tbody>
+                {{#each users}}
+                <tr>
+                    <td>{{login}}</td>
+                    <td>{{description}}</td>
+                </tr>
+                {{/each}}
+            </tbody>
+        </table>
 
 
-    <h2>Available Endpoints:</h2>
-    
-    <div class="endpoint">
-        <h3>Authorization Endpoint</h3>
-        <p><code>GET /authorize</code></p>
-        <p>Parameters: response_type, client_id, redirect_uri, scope, state, code_challenge, code_challenge_method</p>
+        <h2>Available Endpoints:</h2>
+
+        <div class="endpoint">
+            <h3>Login Form</h3>
+            <p><code>GET /login</code></p>
+            <p>Set this endpoint as authorization URI</p>
+            <p>Display all registered users with links to authorize</p>
+        </div>
+
+        <div class="endpoint">
+            <h3>Authorization Endpoint</h3>
+            <p><code>GET /authorize</code></p>
+            <p>Returns authorization code via redirect.</p>
+            <p>Parameters:login, response_type, client_id, redirect_uri, scope, state</p>
+        </div>
+
+        <div class="endpoint">
+            <h3>Token Endpoint</h3>
+            <p><code>POST /token</code></p>
+            <p>Set this endpoint as token URI</p>
+            <p>Parameters: grant_type, code, redirect_uri, client_id, client_secret,
+                code_verifier, refresh_token</p>
+        </div>
+
+        <div class="endpoint">
+            <h3>User Info Endpoint</h3>
+            <p><code>GET /userinfo</code></p>
+            <p>Headers: Authorization: Bearer &lt;access_token&gt;</p>
+            <p>You can configure header's value prefix. See the application's
+                configuration</p>
+        </div>
     </div>
-    
-    <div class="endpoint">
-        <h3>Token Endpoint</h3>
-        <p><code>POST /token</code></p>
-        <p>Parameters: grant_type, code, redirect_uri, client_id, client_secret, code_verifier, refresh_token</p>
-    </div>
-    
-    <div class="endpoint">
-        <h3>User Info Endpoint</h3>
-        <p><code>GET /userinfo</code></p>
-        <p>Headers: Authorization: Bearer &lt;access_token&gt;</p>
-    </div>
-    
-    <div class="endpoint">
-        <h3>OpenID Connect Configuration</h3>
-        <p><code>GET /.well-known/openid_configuration</code></p>
-    </div>
-    
 </body>
+
 </html>

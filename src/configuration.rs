@@ -1,13 +1,22 @@
 use std::{
     collections::HashMap,
-    fmt::write,
     fs,
     path::{self, Path},
 };
 
-use clap::builder::Str;
 use serde::{Deserialize, Serialize};
 use tracing::{error, info, warn};
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct OAuth2Configuration {
+    pub authorization_header_prefix: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ServerConfiguration {
+    pub host: String,
+    pub port: u16,
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RegisteredUsers {
@@ -23,17 +32,16 @@ pub struct User {
     pub user_info: HashMap<String, String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct OAuth2Configuration {
-    pub authorization_header_prefix: String,
-}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ApplicationConfiguration {
+    pub server: ServerConfiguration,
     pub oauth2: OAuth2Configuration,
     pub users: Vec<User>,
 }
 
+/// Used to display help message after loading default configuration
+const DEFAULT_CONFIG_PATH: &str = "config/application.json";
 const DEFAULT_CONFIG: &str = include_str!("../config/application.json");
 
 #[derive(Debug, Clone, PartialEq)]
@@ -57,9 +65,9 @@ impl std::error::Error for ConfigurationError {}
 
 impl RegisteredUsers {
     /// Create a new UserConfiguration from a list of users
-    pub fn new(users: Vec<User>) -> Self {
+    pub fn new(users: &Vec<User>) -> Self {
         Self {
-            users: users.into_iter().map(|u| (u.login.clone(), u)).collect(),
+            users: users.into_iter().map(|u| (u.login.clone(), u.clone())).collect(),
         }
     }
 
@@ -88,7 +96,6 @@ impl RegisteredUsers {
     pub fn all(&self) -> Vec<User> {
         self.users.values().cloned().collect()
     }
-
 }
 
 impl ApplicationConfiguration {
@@ -136,6 +143,30 @@ impl ApplicationConfiguration {
         );
         Ok(user_config)
     }
+
+    pub fn server_address(&self) -> (String, u16) {
+        (
+            self.server.host.clone(),
+            self.server.port,
+        )
+    }
+}
+
+impl Default for ApplicationConfiguration {
+    fn default() -> Self {
+        let msg = format!(
+            "Using default embedded configuration (https://github.com/leonidv/oauth2-mock/blob/master/{})",
+            DEFAULT_CONFIG_PATH
+        );
+        info!(msg);
+
+        match Self::from_json(DEFAULT_CONFIG) {
+            Ok(config) => config,
+            Err(e) => {
+                panic!("Failed to parse default configuration: {}", e);
+            }
+        }
+    }
 }
 
 #[cfg(test)]
@@ -148,8 +179,8 @@ mod tests {
     fn parse_config() {
         let app_config = ApplicationConfiguration::from_json(DEFAULT_CONFIG).unwrap();
 
-        let user_config = RegisteredUsers::new(app_config.users);
-        
+        let user_config = RegisteredUsers::new(&app_config.users);
+
         assert_eq!(user_config.users.len(), 2);
         let admin = user_config.users.get("Admin").unwrap();
         assert_eq!(admin.login, "Admin");

@@ -28,3 +28,7 @@ Authorization: Bearer 7cf1f752-33a8-4709-a1c4-306821b6efa8
 #######################
 
 &state=456
+
+curl --request GET \
+  --url '' \
+  --header 'user-agent: vscode-restclient'

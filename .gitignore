@@ -1,1 +1,3 @@
 /target
+build-run-release.sh
+build-run-docker.sh
