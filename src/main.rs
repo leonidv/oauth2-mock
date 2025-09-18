@@ -31,7 +31,7 @@ struct Args {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct AuthorizationCodeRequest {
-    login: String, // Store the selected user key
+    login: Option<String>, // Store the selected user key
     response_type: String,
     client_id: String,
     redirect_uri: String,
@@ -279,7 +279,9 @@ async fn authorize(
             .unwrap();
     }
 
-    if params.login.is_empty() {
+    let login = params.login.unwrap_or("".to_string());
+
+    if login.is_empty() {
         let redirect_uri = format!("{}?error=invalid_request", redirect_uri);
         let msg = "login is required and can't be empty string".to_string();
         return response_302
@@ -288,7 +290,6 @@ async fn authorize(
             .unwrap();
     }
 
-    let login = params.login;
     if !state.users.contains_login(&login) {
         let redirect_uri = format!("{}?error=access_denied", redirect_uri);
         let msg = format!("User {} not found", login);

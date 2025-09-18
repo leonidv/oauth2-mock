@@ -1,5 +1,14 @@
 @url=http://localhost:3000
 
+### 
+# Login pages with registered users
+GET {{url}}/login?
+    &response_type=code
+    &client_id=123
+    &redirect_uri=http://localhost:8080
+    &state=456
+
+
 ###
 # Get authorization code by user's login
 GET {{url}}/authorize
