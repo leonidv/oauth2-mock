@@ -191,8 +191,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route("/", get(home))
         .route("/login", get(login))
         .route("/authorize", get(authorize))
-        .route("/access_token", post(access_token))
-        .route("/user_info", get(userinfo))
+        .route("/token", post(access_token))
+        .route("/userinfo", get(userinfo))
         .route("/style.css", get(css_styles))
         .with_state(state);
 

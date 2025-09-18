@@ -3,7 +3,7 @@
 ###
 # Get authorization code by user's login
 GET {{url}}/authorize
-    ?login=Admin
+    ?login=admin
     &response_type=code
     &client_id=123
     &redirect_uri=http://localhost:8080
@@ -12,7 +12,7 @@ GET {{url}}/authorize
 
 ###
 # Get access token by authorization code
-POST {{url}}/access_token
+POST {{url}}/token
 Content-Type: application/x-www-form-urlencoded
 
 grant_type=authorization_code
@@ -22,7 +22,7 @@ grant_type=authorization_code
 
 ###
 # Load user info
-GET {{url}}/user_info
+GET {{url}}/userinfo
 Authorization: Bearer 7cf1f752-33a8-4709-a1c4-306821b6efa8
 
 #######################
