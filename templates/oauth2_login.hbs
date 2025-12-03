@@ -1,0 +1,24 @@
+<style>
+{{#*inline "style"}}
+    .monospace {
+        font-family: 'Courier New', Courier, monospace;
+        font-size: 0.9em;
+    }
+{{/inline}}
+</style>
+{{#*inline "script"}}
+{{/inline}}
+
+{{#*inline "page"}}
+         <h2>Users</h2>   
+         <div class="user-list">
+            {{#each users}}
+            <div class="user-item">
+                <h3><a href="/authorize?login={{login}}&{{../auth_params}}">{{login}}</a></a></h4>
+                    <p>{{description}}</p>
+            </div>
+            {{/each}}
+        </div>
+        <div>After an authorization you will be redirected to: <span class="monospace">{{redirect_uri}}</span>  </div>
+{{/inline}}
+{{> base}}

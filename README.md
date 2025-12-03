@@ -10,6 +10,7 @@ This server is designed **only** for testing OAuth2 flows in development and tes
 - **User Info Endpoint**: Retrieve user information specific to the authorized user
 - **Configurable Users**: Load users from JSON configuration file with custom claims
 - **Interactive User Selection**: Web interface to select users during authorization
+- **
 
 ![Authorization page](images/authorization_page.png)
 
@@ -37,3 +38,7 @@ Each user is described by fields:
 * **description** - some information about the user. Authorization page shows the description of each user.
 * **userInfo** - any json object. The user_info endpoint returns this object "as-is".
   You can write any fields - usually same as your production OAuth2 provider.
+
+## Simple access restriction
+TODO Добавить описание ограничения доступа
+
