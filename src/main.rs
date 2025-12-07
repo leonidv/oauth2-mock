@@ -1,14 +1,17 @@
+mod authorization;
 mod configuration;
 mod oauth2;
 mod templates;
 
 use axum::{
     Router,
-    extract::{Form, OriginalUri, State},
+    extract::{Form, OriginalUri, Query, State},
+    handler::Handler,
     http::{
         StatusCode,
         header::{self, SET_COOKIE},
     },
+    middleware::from_extractor,
     response::{Html, IntoResponse, Redirect, Response},
     routing::{get, post},
 };
@@ -20,8 +23,11 @@ use std::sync::Arc;
 use tracing::{info, warn};
 use uuid::Uuid;
 
+use authorization::CookieJarAuthorized;
 use configuration::*;
 use templates::Templates;
+
+use crate::{authorization::CheckAccessCode, oauth2::authorize};
 
 #[derive(Parser, Debug)]
 #[command(name = "oauth2-mock")]
@@ -31,6 +37,12 @@ struct Args {
     #[arg(short, long)]
     config: Option<String>,
 }
+
+const CHECK_ACCESS_CODE_PATH: &str = "/check_code";
+const OAUTH2_LOGIN_PATH: &str = "/login";
+const OAUTH2_AUTHORIZATION_PATH: &str = "/authorize";
+const OAUTH2_TOKEN_PATH: &str = "/token";
+const OAUTH2_USERINFO_PATH: &str = "/userinfo";
 
 #[derive(Debug, Clone)]
 struct AppState {
@@ -132,18 +144,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let templates = Templates::load();
 
     let state = AppState::new(&app_config, templates);
-
-    // Build our application with a route
-    let app = Router::new()
-        .route("/style.css", get(css_styles))
-        .route("/", get(home))
-        .route("/test", post(authorize))
-        .route("/test", get(login))
-        .route("/login", get(oauth2::login))
-        .route("/authorize", get(oauth2::authorize))
-        .route("/token", post(oauth2::access_token))
-        .route("/userinfo", get(oauth2::userinfo))
-        .with_state(state);
+    let app = setup_router(state);
 
     let server_address = app_config.server_address();
     let listener = tokio::net::TcpListener::bind(&server_address).await?;
@@ -159,6 +160,22 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
+fn setup_router(state: AppState) -> Router {
+    Router::new()
+        .route("/style.css", get(css_styles))
+        .route("/", get(home))
+        .route("/test", get(login))
+        .route(OAUTH2_LOGIN_PATH, get(oauth2::login))
+        .route(CHECK_ACCESS_CODE_PATH, post(authorization::check_access))
+        .route(
+            OAUTH2_AUTHORIZATION_PATH,
+            get(oauth2::authorize).layer(from_extractor::<CheckAccessCode>()),
+        )
+        .route(OAUTH2_TOKEN_PATH, post(oauth2::access_token))
+        .route(OAUTH2_USERINFO_PATH, get(oauth2::userinfo))
+        .with_state(state)
+}
+
 async fn home(State(state): State<AppState>) -> Result<Html<String>, StatusCode> {
     let templates = &state.templates;
 
@@ -167,32 +184,13 @@ async fn home(State(state): State<AppState>) -> Result<Html<String>, StatusCode>
     Ok(Html(html))
 }
 
-#[derive(Deserialize)]
-struct AuthorizeParams {
-    access_code: String,
-}
 
-#[axum::debug_handler]
-async fn authorize(OriginalUri(uri): OriginalUri, jar: CookieJar, Form(authorize_params): Form<AuthorizeParams>) -> Response {
-    let redirect_uri = uri.path_and_query().unwrap().as_str();
-    info!("redirect after authorization: {}",redirect_uri);
-    let access_code = authorize_params.access_code;
-    let authorized = if access_code == "123" { "yes" } else { "no" };
-
-    let cookie = Cookie::build(("authorized", authorized))
-        .expires(None)
-        .path("/")
-        .http_only(true)
-        .build();
-
-    let response_jar = jar.add(cookie);
-
-    (response_jar, Redirect::to(redirect_uri)).into_response()
-}
-
-async fn login(State(state): State<AppState>) -> Result<Html<String>, StatusCode> {
+async fn login(
+    State(state): State<AppState>,
+    original_uri: OriginalUri,
+) -> Result<Html<String>, StatusCode> {
     let templates = &state.templates;
-    let html = templates.render_login();
+    let html = templates.render_authorize_form(original_uri, true);
     Ok(Html(html))
 }
 

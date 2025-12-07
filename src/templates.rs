@@ -1,3 +1,6 @@
+use std::fmt::format;
+
+use axum::{extract::OriginalUri, http::Uri};
 use handlebars::{DirectorySourceOptions, Handlebars};
 use rust_embed::Embed;
 use serde::Serialize;
@@ -5,8 +8,7 @@ use serde_json::json;
 use tracing::info;
 
 use crate::{
-    oauth2::AuthorizationCodeRequest,
-    configuration::{RegisteredUsers, User},
+    CHECK_ACCESS_CODE_PATH, configuration::{RegisteredUsers, User}, oauth2::AuthorizationQuery
 };
 
 #[derive(Embed)]
@@ -33,6 +35,13 @@ struct LoginVariables {
     redirect_uri: String,
 }
 
+#[derive(Serialize)]
+struct AuthorizeFormVariables {
+    action_url: String,
+    show_error: bool,
+    return_to: String,
+}
+
 impl Templates {
     pub fn load() -> Self {
         let handlebars = load_templates().unwrap();
@@ -46,17 +55,20 @@ impl Templates {
         self.handlebars.render("home", &data).unwrap()
     }
 
-    pub fn render_login(&self) -> String {
-        let data = json!({
-            "parent": "base"
-        });
-        self.handlebars.render("login", &data).unwrap()
+    pub fn render_authorize_form(&self, uri : OriginalUri, show_error : bool) -> String {
+        let return_to = uri.0.to_string();
+        let data = AuthorizeFormVariables {
+            action_url: CHECK_ACCESS_CODE_PATH.to_string(),
+            show_error,
+            return_to,
+        };
+        self.handlebars.render("access_code_form", &data).unwrap()
     }
 
     pub fn render_oauth2_login(
         &self,
         users: &RegisteredUsers,
-        auth_request: &AuthorizationCodeRequest,
+        auth_request: &AuthorizationQuery,
     ) -> String {
         let mut users = Vec::from_iter(users.all().iter().map(|v| v.clone()));
         users.sort_by(|a, b| a.login.cmp(&b.login));

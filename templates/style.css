@@ -3,6 +3,7 @@ body {
     font-family: 'Roboto', Arial, Helvetica, sans-serif;
     font-size: 20t;
     background-color: #f0f0f0;
+    --warn-color: #c62e35;
 }
 
 header {
@@ -34,7 +35,7 @@ h1 {
 
 
 .warning {
-    color :#b2040e;
+    color :var(--warn-color);
 }
 
 .container {
@@ -127,4 +128,12 @@ code {
     font-size: 1.2em;
     margin-right: 10px;
     vertical-align: middle;
+}
+
+.error {
+      color: var(--warn-color);
+      background: #ffebee;
+      padding: 10px;
+      border-radius: 5px;
+      margin: 10px 0;
 }

@@ -1,11 +1,12 @@
 use axum::{
     Router,
     body::Body,
-    extract::{Form, Query, State},
+    extract::{Form, OriginalUri, Query, State},
     http::{HeaderMap, StatusCode, header},
     response::{Html, IntoResponse, Json, Redirect, Response},
     routing::{get, post},
 };
+use axum_extra::extract::CookieJar;
 use chrono::Utc;
 use clap::Parser;
 use serde::{Deserialize, Serialize};
@@ -14,12 +15,12 @@ use std::sync::Arc;
 use tracing::{info, warn};
 use uuid::Uuid;
 
-use crate::configuration::*;
+use crate::authorization::{AuthorizationState, CookieJarAuthorized};
 
 use crate::AppState;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub(crate) struct AuthorizationCodeRequest {
+pub(crate) struct AuthorizationQuery {
     pub(crate) login: Option<String>, // Store the selected user key
     pub(crate) response_type: String,
     pub(crate) client_id: String,
@@ -49,42 +50,49 @@ struct AccessTokenError {
     pub error: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-struct TokenResponse {
-    access_token: String,
-    token_type: String,
-    expires_in: i64,
-    refresh_token: Option<String>,
-    scope: Option<String>,
-}
+// #[derive(Debug, Clone, Serialize, Deserialize)]
+// struct TokenResponse {
+//     access_token: String,
+//     token_type: String,
+//     expires_in: i64,
+//     refresh_token: Option<String>,
+//     scope: Option<String>,
+// }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-struct AuthorizationCode {
-    code: String,
-    client_id: String,
-    redirect_uri: String,
-    scope: Option<String>,
-    expires_at: chrono::DateTime<Utc>,
-    user: User,
-}
+// #[derive(Debug, Clone, Serialize, Deserialize)]
+// struct AuthorizationCode {
+//     code: String,
+//     client_id: String,
+//     redirect_uri: String,
+//     scope: Option<String>,
+//     expires_at: chrono::DateTime<Utc>,
+//     user: User,
+// }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-struct AccessToken {
-    token: String,
-    client_id: String,
-    scope: Option<String>,
-    expires_at: chrono::DateTime<Utc>,
-    user_id: String,
-    user_key: Option<String>, // Store the user key for lookup
-}
+//#[derive(Debug, Clone, Serialize, Deserialize)]
+// struct AccessToken {
+//     token: String,
+//     client_id: String,
+//     scope: Option<String>,
+//     expires_at: chrono::DateTime<Utc>,
+//     user_id: String,
+//     user_key: Option<String>, // Store the user key for lookup
+// }
 
 pub async fn login(
     State(state): State<AppState>,
-    Query(params): Query<AuthorizationCodeRequest>,
+    original_uri: OriginalUri,
+    jar: CookieJar,
+    Query(params): Query<AuthorizationQuery>,
 ) -> Result<Html<String>, StatusCode> {
     let templates = &state.templates;
 
-    let html = templates.render_oauth2_login(state.users.as_ref(), &params);
+    let html = if jar.is_authorized() {
+        templates.render_oauth2_login(state.users.as_ref(), &params)
+    } else {
+        let show_error = jar.get_authorization_state() == AuthorizationState::CodeIsBad;
+        templates.render_authorize_form(original_uri, show_error)
+    };
 
     Ok(Html(html))
 }
@@ -94,7 +102,7 @@ pub async fn login(
 /// Return user login as code if user is defined in configuration
 pub async fn authorize(
     State(state): State<AppState>,
-    Query(params): Query<AuthorizationCodeRequest>,
+    Query(params): Query<AuthorizationQuery>,
 ) -> Response {
     info!("Authorization request: {:?}", params);
 
