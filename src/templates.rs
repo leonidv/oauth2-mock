@@ -1,10 +1,8 @@
-use std::fmt::format;
 
-use axum::{extract::OriginalUri, http::Uri};
+use axum::extract::OriginalUri;
 use handlebars::{DirectorySourceOptions, Handlebars};
 use rust_embed::Embed;
 use serde::Serialize;
-use serde_json::json;
 use tracing::info;
 
 use crate::{

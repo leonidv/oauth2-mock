@@ -1,19 +1,13 @@
 use axum::{
-    Router,
     body::Body,
     extract::{Form, OriginalUri, Query, State},
-    http::{HeaderMap, StatusCode, header},
-    response::{Html, IntoResponse, Json, Redirect, Response},
-    routing::{get, post},
+    http::{HeaderMap, StatusCode},
+    response::{Html, IntoResponse, Json, Response},
 };
-use axum_extra::extract::{CookieJar, SignedCookieJar};
-use chrono::Utc;
+use axum_extra::extract::SignedCookieJar;
 use clap::Parser;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
-use std::sync::Arc;
 use tracing::{info, warn};
-use uuid::Uuid;
 
 use crate::authorization::{AuthorizationState, SignedCookieJarAuthorized};
 
@@ -58,11 +52,13 @@ pub async fn login(
 ) -> Result<Html<String>, StatusCode> {
     let templates = &state.templates;
 
-    let html = if jar.is_authorized() {
-        templates.render_oauth2_login(state.users.as_ref(), &params)
-    } else {
+    let require_access_code = state.access_restricted && !jar.is_authorized();
+
+    let html = if require_access_code {
         let show_error = jar.get_authorization_state() == AuthorizationState::CodeIsBad;
         templates.render_authorize_form(original_uri, show_error)
+    } else {
+        templates.render_oauth2_login(state.users.as_ref(), &params)
     };
 
     Ok(Html(html))

@@ -7,36 +7,69 @@ use std::{
 use serde::{Deserialize, Serialize};
 use tracing::{error, info, warn};
 
+use crate::authorization;
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct OAuth2Configuration {
     pub authorization_header_prefix: String,
 }
 
+/// Network server configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ServerConfiguration {
+    /// Server host.
+    /// Use 0.0.0.0 to make it available from all interfaces (useful for running in Docker)
     pub host: String,
+
+    /// Server port
     pub port: u16,
 }
 
+/// You can restrict access to the oauth2-mock server by the code.
+/// When access restriction is enabled, the user must provide the access code to make OAuth2 authorization.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AccessRestriction {
+    /// Enable or disable access restriction
+    pub enabled: bool,
+
+    /// Access code, which will be required to make OAuth2 authorization
+    pub code: String,
+
+    /// Sign key for signed cookies. Should be more than 64 characters or empty.
+    /// If it is empty, a key will be generated automatically. This is not a recommended way
+    /// because users will have to enter an access code after each service reboot.
+    /// You can run `oauth2mock generate-sign-key` to get valid key.
+    pub sign_key: String,
+}
+
+/// Users configuration. See [User] struct for more information
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RegisteredUsers {
     /// Keys are logins, values are users
     users: HashMap<String, User>,
 }
 
+/// User configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct User {
+    /// Login allows identifying a user quickly and meaningfully.
+    /// OAuth2 mock property, does not affect OAuth2 authorization
     pub login: String,
+
+    /// Good description allows choose right user for authorization.
+    /// OAuth2 mock property, does not affect OAuth2 authorization
     pub description: String,
+
+    /// User info which will be returned by userinfo endpoint
     #[serde(rename = "userInfo")]
     pub user_info: HashMap<String, String>,
 }
-
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ApplicationConfiguration {
     pub server: ServerConfiguration,
     pub oauth2: OAuth2Configuration,
+    pub access_restriction: AccessRestriction,
     pub users: Vec<User>,
 }
 
@@ -48,6 +81,8 @@ const DEFAULT_CONFIG: &str = include_str!("../config/application.json");
 pub enum ConfigurationError {
     FileNotFound(String),
     CantBuildAbsolutePath(String),
+    NoUsers,
+    AccessRestrictionError(String),
 }
 
 impl std::fmt::Display for ConfigurationError {
@@ -56,6 +91,12 @@ impl std::fmt::Display for ConfigurationError {
             ConfigurationError::FileNotFound(path) => write!(f, "File not found: {}", path),
             &ConfigurationError::CantBuildAbsolutePath(ref path) => {
                 write!(f, "Cant build absolute path: {}", path)
+            }
+            ConfigurationError::NoUsers => {
+                write!(f, "Config must contains list of users")
+            }
+            &ConfigurationError::AccessRestrictionError(ref message) => {
+                write!(f, "Access restriction configuration error: {}", message)
             }
         }
     }
@@ -67,7 +108,10 @@ impl RegisteredUsers {
     /// Create a new UserConfiguration from a list of users
     pub fn new(users: &Vec<User>) -> Self {
         Self {
-            users: users.into_iter().map(|u| (u.login.clone(), u.clone())).collect(),
+            users: users
+                .into_iter()
+                .map(|u| (u.login.clone(), u.clone()))
+                .collect(),
         }
     }
 
@@ -102,7 +146,36 @@ impl ApplicationConfiguration {
     /// Create a application configuration from a JSON string
     fn from_json(json: &str) -> Result<Self, Box<dyn std::error::Error>> {
         match serde_json::from_str::<ApplicationConfiguration>(json) {
-            Ok(config) => Ok(config),
+            Ok(mut config) => {
+                if config.users.is_empty() {
+                    return Err(Box::new(ConfigurationError::NoUsers));
+                }
+
+                let access_restriction = &config.access_restriction;
+                if access_restriction.enabled {
+                    if access_restriction.code.is_empty() {
+                        return Err(Box::new(ConfigurationError::AccessRestrictionError(
+                            "Access restriction is enabled, but code is empty".to_string(),
+                        )));
+                    }
+
+                    let sign_key_len = access_restriction.sign_key.len();
+                    if sign_key_len > 0 && sign_key_len < 64 {
+                        return Err(Box::new(ConfigurationError::AccessRestrictionError(
+                            "Sign key must be at least 64 characters long".to_string(),
+                        )));
+                    }
+                }
+
+                if !access_restriction.enabled || access_restriction.sign_key.is_empty() {
+                    // small hack, even if access restriction disable,
+                    // we generate sign key to provide valid sign key in the configuration
+                    config.access_restriction.sign_key = authorization::generate_sign_key()
+                }
+
+                Ok(config)
+            }
+
             Err(e) => {
                 warn!("Failed to parse JSON configuration: {}", e);
                 Err(Box::new(e))
@@ -135,20 +208,17 @@ impl ApplicationConfiguration {
         let config_content = fs::read_to_string(config_path.clone())
             .map_err(|_| ConfigurationError::FileNotFound(config_path.display().to_string()))?;
 
-        let user_config = Self::from_json(&config_content)?;
+        let config = Self::from_json(&config_content)?;
 
         info!(
             "Loaded application configuration from file: {}",
             config_path.display()
         );
-        Ok(user_config)
+        Ok(config)
     }
 
     pub fn server_address(&self) -> (String, u16) {
-        (
-            self.server.host.clone(),
-            self.server.port,
-        )
+        (self.server.host.clone(), self.server.port)
     }
 }
 

@@ -6,6 +6,11 @@
   "oauth2": {
     "authorization_header_prefix": "Bearer"
   },
+  "access_restriction": {
+    "enabled": false,
+    "code":"",
+    "sign_key":""
+  },
   "users": [
     {
       "login": "admin",

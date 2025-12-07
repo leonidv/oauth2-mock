@@ -20,6 +20,7 @@ url = "2.5.7"
 clap = { version = "4.5.53", features = ["derive"] }
 handlebars = {version = "6.3.2", features = ["rust-embed","dir_source"]}
 rust-embed={version ="8.9.0", features = ["include-exclude"]}
+cookie = "0.18.1"
 
 [features]
 devmode = []
