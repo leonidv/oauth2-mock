@@ -1,16 +1,17 @@
 # OAuth2 Mock Server
 
-A lightweight OAuth2 authorization server mock.
+A lightweight very simple OAuth2 authorization server mock.
+
 This server is designed **only** for testing OAuth2 flows in development and testing environments. Another case — use this as a simple OAuth2 provider for product demonstration.
 
 ## Features
 
-- **Authorization Code Flow**: Complete implementation of the OAuth2 authorization code grant type
-- **Token Endpoint**: Exchange authorization codes for access tokens
-- **User Info Endpoint**: Retrieve user information specific to the authorized user
 - **Configurable Users**: Load users from JSON configuration file with custom claims
 - **Interactive User Selection**: Web interface to select users during authorization
-- **
+- **Access Restriction**: Simple way restrict access to your demo environments.
+- **Authorization Code Flow**: Complete implementation of the OAuth2 authorization code grant type
+- **User Info Endpoint**: Retrieve user information specific to the authorized user
+
 
 ![Authorization page](images/authorization_page.png)
 
@@ -40,5 +41,24 @@ Each user is described by fields:
   You can write any fields - usually same as your production OAuth2 provider.
 
 ## Simple access restriction
-TODO Добавить описание ограничения доступа
+If you use oauth2mock for a public demo stand of your application, you may want to restrict access to
+the application. OAuth2mock implements a simple but effective access restriction mechanism 
+using an Access Code to process OAuth2 flow. It ensures that only users who know the correct code can 
+access your demo stand.
 
+**Warning** Do not use oauth2mock to secure your demo application if it contains any private or 
+sensitive information.
+
+![Access code](images/access_code.png)
+
+By default restriction access is disabled. You may enabled it using configuration's section `access_restriction`
+* **enabled** Enables or disables the access restriction
+* **code** The access code that users must enter to make OAuth2 authorization request. Can't be empty if access restriction is enabled 
+* **sign_key** A secret key server uses to sign authentication cookies. Must be a string with a length of more than 64 characters. An empty string is allowed, but not recommended. If empty, oauth2mock will generate sing_key on each service restart. 
+
+## Generate sign-key
+oauth2mock can generate good sign_key for you:
+```
+oauth2-mock generate-sign-key
+```
+Copy output string and paste into the configuration.

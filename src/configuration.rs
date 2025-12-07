@@ -162,7 +162,7 @@ impl ApplicationConfiguration {
                     let sign_key_len = access_restriction.sign_key.len();
                     if sign_key_len > 0 && sign_key_len < 64 {
                         return Err(Box::new(ConfigurationError::AccessRestrictionError(
-                            "Sign key must be at least 64 characters long".to_string(),
+                            "Sign key must be at least 64 characters long. Use [oauth2-mock generate-sign-key] to get valid value".to_string(),
                         )));
                     }
                 }

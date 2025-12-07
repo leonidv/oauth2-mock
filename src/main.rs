@@ -71,7 +71,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let app_config = match &args.config {
         Some(path) => match ApplicationConfiguration::from_file(path) {
             Ok(config) => config,
-            Err(e) => {
+            Err(e) => {           
                 eprintln!("Failed to load configuration.\n{}", e);
                 std::process::exit(1);
             }
