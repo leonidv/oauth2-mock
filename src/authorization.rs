@@ -1,12 +1,26 @@
 use axum::{
     Form, 
-    extract::{FromRequestParts},
+    extract::{FromRef, FromRequestParts, State},
     http::{StatusCode, request::Parts},
-    response::{Response, Redirect, IntoResponse},
+    response::{IntoResponse, Redirect, Response},
 };
-use axum_extra::extract::{CookieJar, cookie::Cookie};
+use axum_extra::extract::{SignedCookieJar, cookie::{Cookie, Key}};
 use serde::Deserialize;
 
+use crate::AppState;
+
+
+impl FromRef<AppState> for Key {
+    fn from_ref(state: &AppState) -> Key {
+        state.key.clone()
+    }
+}
+
+impl Into<Key> for AppState {
+    fn into(self) -> Key {
+        self.key.clone()
+    }
+}
 #[derive(PartialEq, Eq)]
 pub(crate) enum AuthorizationState {
     NoCode,
@@ -14,13 +28,14 @@ pub(crate) enum AuthorizationState {
     CodeIsGood,
 }
 
-pub(crate) trait CookieJarAuthorized {
+pub(crate) trait SignedCookieJarAuthorized {
     fn is_authorized(&self) -> bool;
     fn get_authorization_state(&self) -> AuthorizationState;
-    fn set_authorized(&self, authorized: bool) -> CookieJar;
+    fn set_authorized(&self, authorized: bool) -> Self;
 }
 
-impl CookieJarAuthorized for CookieJar {
+impl SignedCookieJarAuthorized for SignedCookieJar<AppState>
+{
     fn is_authorized(&self) -> bool {
         self.get_authorization_state() == AuthorizationState::CodeIsGood
     }
@@ -38,7 +53,7 @@ impl CookieJarAuthorized for CookieJar {
         }
     }
 
-    fn set_authorized(&self, authorized: bool) -> CookieJar {
+    fn set_authorized(&self, authorized: bool) -> Self {
         let cookie = if authorized {
             Cookie::new("authorized", "yes")
         } else {
@@ -51,14 +66,14 @@ impl CookieJarAuthorized for CookieJar {
 
 pub(crate) struct CheckAccessCode;
 
-impl<S> FromRequestParts<S> for CheckAccessCode
-where
-    S: Send + Sync,
+
+
+impl FromRequestParts<AppState> for CheckAccessCode
 {
     type Rejection = StatusCode;
 
-    async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
-        let maybe_cookies = CookieJar::from_request_parts(parts, state).await;
+    async fn from_request_parts(parts: &mut Parts, state: &AppState) -> Result<Self, Self::Rejection> {
+        let maybe_cookies = SignedCookieJar::from_request_parts(parts, state).await;
         match maybe_cookies {
             Ok(cookies) => {
                 if cookies.is_authorized() {
@@ -79,7 +94,7 @@ pub(crate) struct AccessCodeForm {
 }
 
 #[axum::debug_handler]
-pub(crate) async fn check_access(jar: CookieJar, Form(authorize_params): Form<AccessCodeForm>) -> Response {
+pub(crate) async fn check_access(State(state): State<AppState>, jar: SignedCookieJar<AppState>, Form(authorize_params): Form<AccessCodeForm>) -> Response {
     let redirect_uri = &authorize_params.return_to;
 
     let access_code = authorize_params.access_code;

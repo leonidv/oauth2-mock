@@ -6,7 +6,7 @@ use axum::{
     response::{Html, IntoResponse, Json, Redirect, Response},
     routing::{get, post},
 };
-use axum_extra::extract::CookieJar;
+use axum_extra::extract::{CookieJar, SignedCookieJar};
 use chrono::Utc;
 use clap::Parser;
 use serde::{Deserialize, Serialize};
@@ -15,7 +15,7 @@ use std::sync::Arc;
 use tracing::{info, warn};
 use uuid::Uuid;
 
-use crate::authorization::{AuthorizationState, CookieJarAuthorized};
+use crate::authorization::{AuthorizationState, SignedCookieJarAuthorized};
 
 use crate::AppState;
 
@@ -50,39 +50,10 @@ struct AccessTokenError {
     pub error: String,
 }
 
-// #[derive(Debug, Clone, Serialize, Deserialize)]
-// struct TokenResponse {
-//     access_token: String,
-//     token_type: String,
-//     expires_in: i64,
-//     refresh_token: Option<String>,
-//     scope: Option<String>,
-// }
-
-// #[derive(Debug, Clone, Serialize, Deserialize)]
-// struct AuthorizationCode {
-//     code: String,
-//     client_id: String,
-//     redirect_uri: String,
-//     scope: Option<String>,
-//     expires_at: chrono::DateTime<Utc>,
-//     user: User,
-// }
-
-//#[derive(Debug, Clone, Serialize, Deserialize)]
-// struct AccessToken {
-//     token: String,
-//     client_id: String,
-//     scope: Option<String>,
-//     expires_at: chrono::DateTime<Utc>,
-//     user_id: String,
-//     user_key: Option<String>, // Store the user key for lookup
-// }
-
 pub async fn login(
     State(state): State<AppState>,
     original_uri: OriginalUri,
-    jar: CookieJar,
+    jar: SignedCookieJar<AppState>,
     Query(params): Query<AuthorizationQuery>,
 ) -> Result<Html<String>, StatusCode> {
     let templates = &state.templates;

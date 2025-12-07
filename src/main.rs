@@ -11,11 +11,11 @@ use axum::{
         StatusCode,
         header::{self, SET_COOKIE},
     },
-    middleware::from_extractor,
+    middleware::{from_extractor, from_extractor_with_state},
     response::{Html, IntoResponse, Redirect, Response},
     routing::{get, post},
 };
-use axum_extra::extract::{CookieJar, cookie::Cookie};
+use axum_extra::extract::{CookieJar, cookie::{Cookie, Key}};
 use clap::Parser;
 use serde::Deserialize;
 use std::collections::HashMap;
@@ -23,11 +23,10 @@ use std::sync::Arc;
 use tracing::{info, warn};
 use uuid::Uuid;
 
-use authorization::CookieJarAuthorized;
 use configuration::*;
 use templates::Templates;
 
-use crate::{authorization::CheckAccessCode, oauth2::authorize};
+use crate::{authorization::*, oauth2::authorize};
 
 #[derive(Parser, Debug)]
 #[command(name = "oauth2-mock")]
@@ -46,6 +45,9 @@ const OAUTH2_USERINFO_PATH: &str = "/userinfo";
 
 #[derive(Debug, Clone)]
 struct AppState {
+    /// signed cookie key
+    key: Key,
+
     /// login -> code
     authorization_codes: Arc<HashMap<String, String>>,
 
@@ -65,6 +67,7 @@ struct AppState {
 
     templates: Arc<Templates>,
 }
+
 
 /// Generates a hash map with UUID as the value for each key
 fn make_uuids_per_key(keys: &Vec<String>) -> HashMap<String, String> {
@@ -106,6 +109,7 @@ impl AppState {
         let users_info = link_access_token_with_user(&users, &authorization_codes, &access_tokens);
 
         Self {
+            key: Key::generate(),
             authorization_codes: Arc::new(authorization_codes),
             access_tokens: Arc::new(access_tokens),
             refresh_tokens: Arc::new(refresh_tokens),
@@ -169,7 +173,7 @@ fn setup_router(state: AppState) -> Router {
         .route(CHECK_ACCESS_CODE_PATH, post(authorization::check_access))
         .route(
             OAUTH2_AUTHORIZATION_PATH,
-            get(oauth2::authorize).layer(from_extractor::<CheckAccessCode>()),
+            get(oauth2::authorize).layer(from_extractor_with_state::<CheckAccessCode,AppState>(state.clone())),
         )
         .route(OAUTH2_TOKEN_PATH, post(oauth2::access_token))
         .route(OAUTH2_USERINFO_PATH, get(oauth2::userinfo))
