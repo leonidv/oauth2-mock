@@ -16,7 +16,9 @@ use axum::{
     routing::{get, post},
 };
 use clap::Parser;
-use std::process::exit;
+use std::{process::exit, time::Duration};
+use tokio::signal;
+use tower_http::timeout::TimeoutLayer;
 use tracing::{info, warn};
 
 use application_state::AppState;
@@ -71,7 +73,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let app_config = match &args.config {
         Some(path) => match ApplicationConfiguration::from_file(path) {
             Ok(config) => config,
-            Err(e) => {           
+            Err(e) => {
                 eprintln!("Failed to load configuration.\n{}", e);
                 std::process::exit(1);
             }
@@ -83,26 +85,32 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let templates = Templates::load();
 
     let state = AppState::new(&app_config, templates);
-    let app = setup_router(state);
+    let app = setup_app(state);
 
     let server_address = app_config.server_address();
     let listener = tokio::net::TcpListener::bind(&server_address).await?;
+
+    let serve = axum::serve(listener, app).with_graceful_shutdown(shutdown_signal());
+
     info!(
         "OAuth2 Mock Server listening on http://{}:{}",
         &server_address.0, &server_address.1
     );
+
     if app_config.access_restriction.enabled {
         info!("Access is restricted")
     }
+
     info!("Registered users:");
     app_config.users.iter().for_each(|u| {
         info!("  -- {} ({})", u.login, u.description);
     });
-    axum::serve(listener, app).await?;
+
+    serve.await?;
     Ok(())
 }
 
-fn setup_router(state: AppState) -> Router {
+fn setup_app(state: AppState) -> Router {
     Router::new()
         .route("/style.css", get(css_styles))
         .route("/", get(home))
@@ -117,6 +125,10 @@ fn setup_router(state: AppState) -> Router {
         )
         .route(OAUTH2_TOKEN_PATH, post(oauth2::access_token))
         .route(OAUTH2_USERINFO_PATH, get(oauth2::userinfo))
+        .layer(TimeoutLayer::with_status_code(
+            StatusCode::REQUEST_TIMEOUT,
+            Duration::from_millis(100),
+        ))
         .with_state(state)
 }
 
@@ -145,4 +157,28 @@ async fn css_styles(State(state): State<AppState>) -> Response {
         templates.css().to_string(),
     )
         .into_response();
+}
+
+async fn shutdown_signal() {
+    let ctrl_c = async {
+        signal::ctrl_c()
+            .await
+            .expect("failed to install Ctrl+C handler");
+    };
+
+    #[cfg(unix)]
+    let terminate = async {
+        signal::unix::signal(signal::unix::SignalKind::terminate())
+            .expect("failed to install signal handler")
+            .recv()
+            .await;
+    };
+
+    #[cfg(not(unix))]
+    let terminate = std::future::pending::<()>();
+
+    tokio::select! {
+        _ = ctrl_c => {},
+        _ = terminate => {}
+    }
 }
