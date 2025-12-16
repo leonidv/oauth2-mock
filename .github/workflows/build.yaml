@@ -33,4 +33,4 @@ jobs:
         path: |
          target/release/oauth2-mock
          Dockerfile
-        if-no-files-found: fail
+        if-no-files-found: error
