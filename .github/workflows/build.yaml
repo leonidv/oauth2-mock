@@ -30,5 +30,7 @@ jobs:
       uses: actions/upload-artifact@v6
       with:
         name: application-binary
-        path: target/release/oauth2-mock
-        if-file-not-found: fail
+        path: |
+         target/release/oauth2-mock
+         Dockerfile
+        if-no-files-found: fail
