@@ -5,7 +5,6 @@ use axum::{
     response::{Html, IntoResponse, Json, Response},
 };
 use axum_extra::extract::SignedCookieJar;
-use clap::Parser;
 use serde::{Deserialize, Serialize};
 use tracing::{info, warn};
 

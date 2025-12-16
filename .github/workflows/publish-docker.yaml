@@ -3,7 +3,12 @@ name: Publish docker
 on: [push]
 
 jobs:
-    build:
+    publish:
         uses: ./.github/workflows/build.yaml
+        
+        name: Login to docker hub
+        us
+
+    
 
 

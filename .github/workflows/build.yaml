@@ -1,4 +1,4 @@
-name: Rust
+name: Build application
 
 on: [workflow_call, workflow_dispatch]
 
@@ -19,7 +19,16 @@ jobs:
         key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
 
     - uses: actions/checkout@v5
+    
     - name: Build binaries in ${{ matrix.BUILD_TARGET }} mode
       run: cargo build --release
+    
     - name: Run tests
       run: cargo test --release
+    
+    - name: Upload binary
+      uses: actions/upload-artifact@v6
+      with:
+        name: application-binary
+        path: target/release/oauth2-mock
+        if-file-not-found: fail
