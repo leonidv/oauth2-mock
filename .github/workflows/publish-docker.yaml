@@ -6,13 +6,15 @@ jobs:
     build:
         uses: ./.github/workflows/build.yaml
     publish:
-        runs-on: ubuntu-latest
         name: Publish  to docker
+        needs: build
+        runs-on: ubuntu-latest
         steps:
           - name: Fetching the application
             uses: actions/download-artifact@v7
             with:
                 name: application-binary
+          - run: echo ${{github.ref_name}}
           - run: ls -R
 
 
