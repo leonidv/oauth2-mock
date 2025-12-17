@@ -1,10 +1,20 @@
-name: Publish docker
+name: Publish new version
 
 on: [push]
 
 jobs:
-    publish:
+    build:
         uses: ./.github/workflows/build.yaml
+    publish:
+        runs-on: ubuntu-latest
+        name: Publish  to docker
+        steps:
+          - name: Fetching the application
+            uses: actions/download-artifact@v7
+            with:
+                name: application-binary
+          - run: ls -R
+
 
     
 
