@@ -10,14 +10,33 @@ jobs:
         needs: build
         runs-on: ubuntu-latest
         steps:
-          - name: Fetching the application
+          - name: Fetching the application from the previous job
             uses: actions/download-artifact@v7
             with:
-                name: application-binary
-          - run: echo ${{github.ref_name}}
-          - run: ls -R
+                name: application-binary          
+
+          - name: Log in to Docker hub
+            uses: docker/login-action@v3.6.0
+            with:
+                username: ${{ secrets.DOCKER_USERNAME }}
+                password: ${{ secrets.DOCKER_PASSWORD }}
+          - name: Set up Docker Buildx
+            uses: docker/setup-buildx-action@v3.11.1
 
 
-    
+          - name: Make Docker's metadata
+            id: meta
+            uses: docker/metadata-action@v5.10.0
+            with:
+              images: leonidv/oauth2-mock  
+                
+          - name: Build and push Docker image
+            id: push
+            uses: docker/build-push-action@v6.18.0
+            with:
+              context: .
+              file: ./Dockerfile
+              push: true
+              tags: ${{ github.sha }}
 
 
