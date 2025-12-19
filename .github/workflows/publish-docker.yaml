@@ -37,6 +37,6 @@ jobs:
               context: .
               file: ./Dockerfile
               push: true
-              tags: ${{ github.sha }}
+              tags: leonidv/oauth2-mock:${{ github.sha }}
 
 
