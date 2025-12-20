@@ -1,6 +1,14 @@
 name: Publish new version
 
-on: [push]
+on: 
+  push:
+    branches: 
+      - master
+    tags:
+      - '*'
+    paths:
+      - 'src/**'
+      - 'Cargo.lock'      
 
 jobs:
     build:
