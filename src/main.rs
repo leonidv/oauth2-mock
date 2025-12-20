@@ -1,24 +1,31 @@
+mod application_state;
+mod authorization;
 mod configuration;
+mod oauth2;
 mod templates;
 
 use axum::{
     Router,
-    body::Body,
-    extract::{Form, Query, State},
-    http::{HeaderMap, StatusCode, header},
-    response::{Html, IntoResponse, Json, Response},
+    extract::{OriginalUri, State},
+    http::{
+        StatusCode,
+        header::{self},
+    },
+    middleware::from_extractor_with_state,
+    response::{Html, IntoResponse, Response},
     routing::{get, post},
 };
-use chrono::Utc;
 use clap::Parser;
-use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
-use std::sync::Arc;
+use std::{process::exit, time::Duration};
+use tokio::signal;
+use tower_http::timeout::TimeoutLayer;
 use tracing::{info, warn};
-use uuid::Uuid;
 
+use application_state::AppState;
 use configuration::*;
 use templates::Templates;
+
+use crate::authorization::*;
 
 #[derive(Parser, Debug)]
 #[command(name = "oauth2-mock")]
@@ -27,154 +34,47 @@ struct Args {
     /// Path to the TOML configuration file containing user definitions
     #[arg(short, long)]
     config: Option<String>,
+
+    #[command(subcommand)]
+    command: Option<CliCommands>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-struct AuthorizationCodeRequest {
-    login: Option<String>, // Store the selected user key
-    response_type: String,
-    client_id: String,
-    redirect_uri: String,
-    scope: Option<String>,
-    state: Option<String>,
+#[derive(Debug, clap::Subcommand)]
+enum CliCommands {
+    GenerateSignKey,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-struct AccessTokenRequest {
-    grant_type: String,
-    code: String,
-    redirect_uri: Option<String>,
-    client_id: Option<String>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-struct AccessTokenResponse {
-    pub access_token: String,
-    pub token_type: String,
-    pub expires_in: i64,
-    pub refresh_token: String,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-struct AccessTokenError {
-    pub error: String,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-struct TokenResponse {
-    access_token: String,
-    token_type: String,
-    expires_in: i64,
-    refresh_token: Option<String>,
-    scope: Option<String>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-struct AuthorizationCode {
-    code: String,
-    client_id: String,
-    redirect_uri: String,
-    scope: Option<String>,
-    expires_at: chrono::DateTime<Utc>,
-    user: User,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-struct AccessToken {
-    token: String,
-    client_id: String,
-    scope: Option<String>,
-    expires_at: chrono::DateTime<Utc>,
-    user_id: String,
-    user_key: Option<String>, // Store the user key for lookup
-}
-
-#[derive(Debug, Clone)]
-struct AppState {
-    /// login -> code
-    authorization_codes: Arc<HashMap<String, String>>,
-
-    /// code -> access_token
-    access_tokens: Arc<HashMap<String, String>>,
-
-    /// access_token -> refresh_token
-    refresh_tokens: Arc<HashMap<String, String>>,
-
-    /// access_token -> user
-    users_info: Arc<HashMap<String, User>>,
-
-    /// users configuration from file
-    users: Arc<RegisteredUsers>,
-
-    authorization_header_prefix: String,
-
-    templates: Arc<Templates>,
-}
-
-/// Generates a hash map with UUID as the value for each key
-fn make_uuids_per_key(keys: &Vec<String>) -> HashMap<String, String> {
-    keys.into_iter()
-        .map(|login| {
-            let uuid = Uuid::new_v4().to_string();
-            (login.clone(), uuid)
-        })
-        .collect()
-}
-
-fn link_access_token_with_user(
-    users: &RegisteredUsers,
-    authorization_codes: &HashMap<String, String>,
-    access_tokens: &HashMap<String, String>,
-) -> HashMap<String, User> {
-    authorization_codes
-        .iter()
-        .map(|(login, code)| {
-            let user = users.load(login);
-            let access_token = access_tokens.get(code).unwrap();
-            (access_token.clone(), user.clone())
-        })
-        .collect()
-}
-
-impl AppState {
-    fn new(app_config: &ApplicationConfiguration, templates: Templates) -> Self {
-        let users = RegisteredUsers::new(&app_config.users);
-        let authorization_codes = make_uuids_per_key(&users.logins());
-
-        let codes: Vec<String> = authorization_codes
-            .values()
-            .map(|s| s.to_string())
-            .collect();
-        let access_tokens = make_uuids_per_key(&codes);
-        let refresh_tokens = make_uuids_per_key(&codes);
-
-        let users_info = link_access_token_with_user(&users, &authorization_codes, &access_tokens);
-
-        Self {
-            authorization_codes: Arc::new(authorization_codes),
-            access_tokens: Arc::new(access_tokens),
-            refresh_tokens: Arc::new(refresh_tokens),
-            users_info: Arc::new(users_info),
-            users: Arc::new(users),
-            authorization_header_prefix: app_config.oauth2.authorization_header_prefix.clone(),
-            templates: Arc::new(templates),
-        }
-    }
-}
+const CHECK_ACCESS_CODE_PATH: &str = "/check_code";
+const OAUTH2_LOGIN_PATH: &str = "/login";
+const OAUTH2_AUTHORIZATION_PATH: &str = "/authorize";
+const OAUTH2_TOKEN_PATH: &str = "/token";
+const OAUTH2_USERINFO_PATH: &str = "/userinfo";
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // Parse command line arguments
+    let args = Args::parse();
+
+    match &args.command {
+        Some(CliCommands::GenerateSignKey) => {
+            println!("{}", authorization::generate_sign_key());
+            exit(0)
+        }
+        None => {}
+    }
+
     // Initialize tracing
     tracing_subscriber::fmt::init();
 
-    // Parse command line arguments
-    let args = Args::parse();
+    if cfg!(feature = "devmode") {
+        warn!("Running in devmode")
+    }
 
     let app_config = match &args.config {
         Some(path) => match ApplicationConfiguration::from_file(path) {
             Ok(config) => config,
             Err(e) => {
-                info!("Failed to load configuration: {}", e);
+                eprintln!("Failed to load configuration.\n{}", e);
                 std::process::exit(1);
             }
         },
@@ -185,29 +85,51 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let templates = Templates::load();
 
     let state = AppState::new(&app_config, templates);
-
-    // Build our application with a route
-    let app = Router::new()
-        .route("/", get(home))
-        .route("/login", get(login))
-        .route("/authorize", get(authorize))
-        .route("/token", post(access_token))
-        .route("/userinfo", get(userinfo))
-        .route("/style.css", get(css_styles))
-        .with_state(state);
+    let app = setup_app(state);
 
     let server_address = app_config.server_address();
     let listener = tokio::net::TcpListener::bind(&server_address).await?;
+
+    let serve = axum::serve(listener, app).with_graceful_shutdown(shutdown_signal());
+
     info!(
         "OAuth2 Mock Server listening on http://{}:{}",
         &server_address.0, &server_address.1
     );
+
+    if app_config.access_restriction.enabled {
+        info!("Access is restricted")
+    }
+
     info!("Registered users:");
     app_config.users.iter().for_each(|u| {
         info!("  -- {} ({})", u.login, u.description);
     });
-    axum::serve(listener, app).await?;
+
+    serve.await?;
     Ok(())
+}
+
+fn setup_app(state: AppState) -> Router {
+    Router::new()
+        .route("/style.css", get(css_styles))
+        .route("/", get(home))
+        .route("/test", get(login))
+        .route(OAUTH2_LOGIN_PATH, get(oauth2::login))
+        .route(CHECK_ACCESS_CODE_PATH, post(authorization::check_access))
+        .route(
+            OAUTH2_AUTHORIZATION_PATH,
+            get(oauth2::authorize).layer(from_extractor_with_state::<CheckAccessCode, AppState>(
+                state.clone(),
+            )),
+        )
+        .route(OAUTH2_TOKEN_PATH, post(oauth2::access_token))
+        .route(OAUTH2_USERINFO_PATH, get(oauth2::userinfo))
+        .layer(TimeoutLayer::with_status_code(
+            StatusCode::REQUEST_TIMEOUT,
+            Duration::from_millis(100),
+        ))
+        .with_state(state)
 }
 
 async fn home(State(state): State<AppState>) -> Result<Html<String>, StatusCode> {
@@ -220,179 +142,11 @@ async fn home(State(state): State<AppState>) -> Result<Html<String>, StatusCode>
 
 async fn login(
     State(state): State<AppState>,
-    Query(params): Query<AuthorizationCodeRequest>,
+    original_uri: OriginalUri,
 ) -> Result<Html<String>, StatusCode> {
     let templates = &state.templates;
-
-    let html = templates.render_login(state.users.as_ref(), &params);
-
+    let html = templates.render_authorize_form(original_uri, true);
     Ok(Html(html))
-}
-
-/// Implement OAuth2 Authorization Code enpoint
-///
-/// Return user login as code if user is defined in configuration
-async fn authorize(
-    State(state): State<AppState>,
-    Query(params): Query<AuthorizationCodeRequest>,
-) -> Response {
-    info!("Authorization request: {:?}", params);
-
-    if params.client_id.is_empty() {
-        let msg = format!("client_id is required and can't be empty string");
-        warn!(msg);
-        return (StatusCode::BAD_REQUEST, msg).into_response();
-    }
-
-    if params.redirect_uri.is_empty() {
-        let msg = format!("redirect_uri is required and can't be empty string");
-        warn!(msg);
-        return (StatusCode::BAD_REQUEST, msg).into_response();
-    }
-
-    let redirect_uri = params.redirect_uri;
-
-    let parsed_redirect_uri = url::Url::parse(&redirect_uri);
-    if parsed_redirect_uri.is_err() {
-        let msg = format!(
-            "Invalid redirect_uri: {}. Redirect URLs must be valid URLs.",
-            redirect_uri
-        );
-        warn!(msg);
-        return (StatusCode::BAD_REQUEST, msg).into_response();
-    }
-    let mut parsed_redirect_uri = parsed_redirect_uri.unwrap();
-
-    let response_302 = Response::builder().status(StatusCode::FOUND);
-
-    // Validate required parameters
-    if params.response_type != "code" {
-        let redirect_uri = format!("{}?error=unsupported_response_type", redirect_uri);
-        let msg = format!(
-            "Invalid response_type: {}. Only code is allowed",
-            params.response_type
-        );
-        warn!(msg);
-        return response_302
-            .header("Location", redirect_uri)
-            .body(Body::from(msg))
-            .unwrap();
-    }
-
-    let login = params.login.unwrap_or("".to_string());
-
-    if login.is_empty() {
-        let redirect_uri = format!("{}?error=invalid_request", redirect_uri);
-        let msg = "login is required and can't be empty string".to_string();
-        return response_302
-            .header("Location", redirect_uri)
-            .body(Body::from(msg))
-            .unwrap();
-    }
-
-    if !state.users.contains_login(&login) {
-        let redirect_uri = format!("{}?error=access_denied", redirect_uri);
-        let msg = format!("User {} not found", login);
-        warn!(msg);
-        return response_302
-            .header("Location", redirect_uri)
-            .body(Body::from(msg))
-            .unwrap();
-    }
-
-    let code = state.authorization_codes.get(&login).unwrap();
-    parsed_redirect_uri
-        .query_pairs_mut()
-        .append_pair("code", &code);
-
-    if let Some(state) = params.state {
-        parsed_redirect_uri
-            .query_pairs_mut()
-            .append_pair("state", &state);
-    }
-
-    response_302
-        .header("Location", parsed_redirect_uri.to_string())
-        .body(Body::empty())
-        .unwrap()
-}
-
-/// Generate access token error with BAD_REQUEST status code
-fn access_token_error(error: &str) -> Response {
-    info!("Access token error: {:?}", error);
-    let body = AccessTokenError {
-        error: error.to_string(),
-    };
-    (StatusCode::BAD_REQUEST, Json(body)).into_response()
-}
-
-/// Implement OAuth2 Token endpoint
-async fn access_token(
-    State(state): State<AppState>,
-    Form(token_request): Form<AccessTokenRequest>,
-) -> Response {
-    info!("Token request: {:?}", token_request);
-
-    if token_request.grant_type.as_str() != "authorization_code" {
-        return access_token_error("unsupported_grant_type");
-    }
-
-    // Handle authorization code flow
-    let code = token_request.code;
-
-    if !state.access_tokens.contains_key(&code) {
-        info!("Authorization code not found: {}", code);
-        return access_token_error("invalid_grant");
-    }
-
-    let access_token = state.access_tokens.get(&code).unwrap();
-    let refresh_token = state.refresh_tokens.get(&code).unwrap();
-
-    let body = AccessTokenResponse {
-        access_token: access_token.clone(),
-        token_type: "bearer".to_string(),
-        expires_in: 3600,
-        refresh_token: refresh_token.clone(),
-    };
-    return (StatusCode::OK, Json(body)).into_response();
-}
-
-async fn userinfo(State(state): State<AppState>, headers: HeaderMap) -> Response {
-    let header_prefix = format!("{} ", &state.authorization_header_prefix).to_string();
-
-    // Extract Bearer token from Authorization header
-    if !headers.contains_key("authorization") {
-        return (StatusCode::BAD_REQUEST, "Require authorization header").into_response();
-    }
-
-    let auth_header = headers.get("authorization").and_then(|h| h.to_str().ok());
-    if auth_header.is_none() {
-        let msg = "Invalid authorization header format (contains non-ASCII symbols)";
-        return (StatusCode::BAD_REQUEST, msg).into_response();
-    }
-
-    let auth_header = auth_header.unwrap();
-
-    if !auth_header.starts_with(&header_prefix) {
-        let msg = format!(
-            "Authorization header must starts with '{}'.
-             You can change prefix in the application config",
-            header_prefix
-        );
-        return (StatusCode::BAD_REQUEST, msg).into_response();
-    }
-
-    let token = &auth_header[header_prefix.len()..]; // Remove "Bearer " prefix
-
-    info!("User info request for token: {}", token);
-
-    if !state.users_info.contains_key(token) {
-        info!("Invalid token: {}", token);
-        return (StatusCode::UNAUTHORIZED, "Invalid token").into_response();
-    }
-
-    let user_info = &state.users_info.get(token).unwrap().user_info;
-    return (StatusCode::OK, Json(user_info)).into_response();
 }
 
 async fn css_styles(State(state): State<AppState>) -> Response {
@@ -403,4 +157,28 @@ async fn css_styles(State(state): State<AppState>) -> Response {
         templates.css().to_string(),
     )
         .into_response();
+}
+
+async fn shutdown_signal() {
+    let ctrl_c = async {
+        signal::ctrl_c()
+            .await
+            .expect("failed to install Ctrl+C handler");
+    };
+
+    #[cfg(unix)]
+    let terminate = async {
+        signal::unix::signal(signal::unix::SignalKind::terminate())
+            .expect("failed to install signal handler")
+            .recv()
+            .await;
+    };
+
+    #[cfg(not(unix))]
+    let terminate = std::future::pending::<()>();
+
+    tokio::select! {
+        _ = ctrl_c => {},
+        _ = terminate => {}
+    }
 }

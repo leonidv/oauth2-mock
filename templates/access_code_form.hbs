@@ -1,0 +1,105 @@
+
+<style>
+{{#*inline "style"}}
+.auth-form-login {
+	width: 30%;
+	margin: 20px auto;
+	display: flex;
+	flex-direction: column;
+	gap: 10px;
+	border-color: #607a9e;
+	border-style: solid;
+	padding: 10px;
+	border-radius: 2px;
+	border-width: 2px;
+}
+}
+
+.auth-form-label {
+    font-weight: bold;
+    color: #333;     
+    margin-bottom: 5px;   
+
+}
+
+
+.auth-form-input {
+  padding: 10px;
+  border: 1px solid #ccc;
+  border-radius: 5px;
+  font-family: 'Roboto', sans-serif;
+  font-size: 24px;
+  letter-spacing: 2px;
+  width: 100%;
+  box-sizing: border-box;
+  background-color: #fafafa;
+
+}
+
+.auth-form-input:focus {
+  border-color: #7495b8;
+  outline: none;
+  box-shadow: 0 0 5px rgba(116, 149, 184, 0.4);
+}
+
+.auth-form-submit {
+  padding: 10px 15px;
+  background: #7495b8;
+  color: white;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+  font-family: 'Roboto', sans-serif;
+  font-size: 16px;
+  align-self: flex-start; /* Makes button not stretch full width */
+  margin-top: 5px;
+  width: 100%;
+}
+
+.auth-form-submit:hover {
+  background: #607a9e;
+}
+
+.auth-form-submit:disabled {
+  background: #cccccc;
+  color: #666;
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+{{/inline}}
+</style>
+
+{{#*inline "script"}}
+
+  document.addEventListener("DOMContentLoaded", function () {
+    const input = document.getElementById("access-code");
+    const submitBtn = document.getElementById("submit");
+
+    // Function to check input and update button state
+    const toggleButton = () => {
+      submitBtn.disabled = input.value.trim() === "";
+    };
+
+    // Check on input (real-time as user types)
+    input.addEventListener("input", toggleButton);
+
+    // Also check on page load (in case of autofill or back button)
+    toggleButton();
+  });
+
+{{/inline}}
+
+
+{{#*inline "page"}}
+<form class="auth-form-login" action="{{action_url}}" method="post">
+    <label for="access-code" class="auth-form-label">Access Code</label>
+    <input id="access-code" type="text" name="access_code" class="auth-form-input" required>
+    <input name="return_to" type="hidden" value="{{return_to}}"/>
+    {{#if show_error}}
+      <p class="error">Access code is invalid</p>
+    {{/if}}      
+    <button id="submit" type="submit" class="auth-form-submit" disabled>Continue</button>
+</form>
+{{/inline}}
+{{> base}}

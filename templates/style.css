@@ -3,12 +3,46 @@ body {
     font-family: 'Roboto', Arial, Helvetica, sans-serif;
     font-size: 20t;
     background-color: #f0f0f0;
+    --warn-color: #c62e35;
+}
+
+header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  border-bottom-color: black;
+  border-bottom-style: solid;
+  border-bottom-width: 1px;
+  margin-bottom: 16px;
+}
+
+footer {
+    display: block;
+    padding: 15px;
+    margin-bottom: 16px;
+    color: #fff;
+    border-radius: 4px;
+    position: relative;    
+    background-color: #7495b8; 
+    text-align: center;
+    margin-top: 16px;
+}
+
+h1 {
+    margin: 0;
+}
+
+
+
+.warning {
+    color :var(--warn-color);
 }
 
 .container {
     width: 960px;
     max-width: 100%;
     padding: 20px;
+    padding-bottom: 1px;
     margin: 20px auto;
     background-color: white;
     box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
@@ -76,13 +110,17 @@ code {
     color: #fff;
     border-radius: 4px;
     position: relative;
-    transition: all 0.3s ease-in-out;
 }
 
 .callout.warning {
     background-color: #c62e35; 
     color: #ffffff; 
     border-left: 5px solid #b2242c; 
+}
+
+.callout.info {
+    background-color: #7495b8; 
+    text-align: center;
 }
 
 .callout.warning::before { /* Создаем псевдоэлемент с символом */
@@ -92,8 +130,10 @@ code {
     vertical-align: middle;
 }
 
-footer {
-  text-align: center;
-  background: #7495b8;
-  padding: 2em;
+.error {
+      color: var(--warn-color);
+      background: #ffebee;
+      padding: 10px;
+      border-radius: 5px;
+      margin: 10px 0;
 }
