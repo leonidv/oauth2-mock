@@ -10,7 +10,7 @@ New Features
 - [X] Processing signals from OS (fast docker restart)
 
 Full changelog:
-https://github.com/leonidv/oauth2-mock/milestone/1
+https://github.com/leonidv/oauth2-mock/milestone/1?closed=1
 
 ## 1.1.0
 Bugfixes
