@@ -2,14 +2,8 @@ name: Publish new version
 
 on: 
   push:
-    branches: 
-      - master
     tags:
       - '*'
-    paths:
-      - 'src/**'
-      - 'Cargo.lock'      
-
 jobs:
     build:
         uses: ./.github/workflows/build.yaml
@@ -45,6 +39,6 @@ jobs:
               context: .
               file: ./Dockerfile
               push: true
-              tags: leonidv/oauth2-mock:${{ github.sha }}
+              tags: ${{ steps.meta.outputs.tags }}
 
 
