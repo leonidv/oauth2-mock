@@ -31,6 +31,9 @@ struct LoginVariables {
     users: Vec<User>,
     auth_params: String,
     redirect_uri: String,
+    state: String,
+    state_changed: bool,
+    previous_state: String,
 }
 
 #[derive(Serialize)]
@@ -70,6 +73,10 @@ impl Templates {
     ) -> String {
         let mut users = Vec::from_iter(users.all().iter().map(|v| v.clone()));
         users.sort_by(|a, b| a.login.cmp(&b.login));
+
+        let state = auth_request.state.clone();
+        let previous_state = auth_request.previous_state.clone();
+
         let auth_params = format!(
             "response_type={}&client_id={}&redirect_uri={}{}{}",
             auth_request.response_type,
@@ -79,9 +86,8 @@ impl Templates {
                 .scope
                 .as_ref()
                 .map_or("".to_string(), |s| format!("&scope={}", s)),
-            auth_request
-                .state
-                .as_ref()
+            state
+                .clone()
                 .map_or("".to_string(), |s| format!("&state={}", s))
         );
         let redirect_uri = auth_request.redirect_uri.clone();
@@ -89,6 +95,9 @@ impl Templates {
             users,
             auth_params,
             redirect_uri,
+            state_changed: previous_state.is_some(),
+            state: state.unwrap_or("".to_string()),
+            previous_state: previous_state.unwrap_or("".to_string()),
         };
         self.handlebars.render("oauth2_login", &data).unwrap()
     }

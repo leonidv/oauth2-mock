@@ -1,24 +1,52 @@
-<style>
 {{#*inline "style"}}
-    .monospace {
-        font-family: 'Courier New', Courier, monospace;
-        font-size: 0.9em;
-    }
 {{/inline}}
-</style>
+
 {{#*inline "script"}}
+function changeState() {
+    const newStateValue = document.getElementById('state').value;
+    const url = new URL(window.location.href);
+    const currentState = url.searchParams.get('state');
+    
+    if (currentState) {
+        url.searchParams.set('state', newStateValue);
+        url.searchParams.set('previous_state', currentState);
+    } else {
+        url.searchParams.set('state', newStateValue);
+    }
+    
+    window.location.href = url.toString();
+}
 {{/inline}}
 
 {{#*inline "page"}}
-         <h2>Users</h2>   
-         <div class="user-list">
-            {{#each users}}
-            <div class="user-item">
-                <h3><a href="/authorize?login={{login}}&{{../auth_params}}">{{login}}</a></a></h4>
-                    <p>{{description}}</p>
-            </div>
-            {{/each}}
+    <div class="oauth2-container">
+        <div class="oauth2-container-panel users-panel">
+            <h2>Login as User</h2>   
+            <ul class="users-list">
+                {{#each users}}
+                <li>
+                    <a href="/authorize?login={{login}}&{{../auth_params}}">{{login}} - {{description}}</a>
+                </li>
+                {{/each}}
+            </ul>
+            <div>After an authorization you will be redirected to: <span class="monospace">{{redirect_uri}}</span></div>
         </div>
-        <div>After an authorization you will be redirected to: <span class="monospace">{{redirect_uri}}</span>  </div>
+        <div class="oauth2-container-panel">
+            <h2>Non-positive Cases</h2>
+            <h3>Errors</h3>
+            <ul class="error-links">
+                <li><a href="/error?error=invalid_request">invalid_request</a></li>
+                <li><a href="/error?error=unauthorized_client">unauthorized_client</a></li>
+                <li><a href="/error?error=access_denied">access_denied</a></li>
+                <li><a href="/error?error=unsupported_response_type">unsupported_response_type</a></li>
+                <li><a href="/error?error=invalid_scope">invalid_scope</a></li>
+                <li><a href="/error?error=server_error">server_error</a></li>
+                <li><a href="/error?error=temporarily_unavailable">temporarily_unavailable</a></li>
+            </ul>
+            <h3>Change state</h3>
+            <input id="state" type="text" value="{{state}}"  > <button onclick="changeState()">Change</button>
+            {{#if state_changed }}<div>Previous state: <span class="monospace" style="word-wrap: anywhere;">{{ previous_state }}</span>  </div> {{/if}}
+        </div>
+    </div>
 {{/inline}}
 {{> base}}

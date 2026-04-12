@@ -5,22 +5,22 @@ edition = "2024"
 
 
 [dependencies]
-axum = {version = "0.8.7", features = ["macros"]}
-axum-extra = {version = "0.12.2", features = ["cookie","cookie-signed"]}
-tokio = { version = "1.48.0", features = ["net","rt-multi-thread","signal"] }
+axum = {version = "0.8.8", features = ["macros"]}
+axum-extra = {version = "0.12.5", features = ["cookie","cookie-signed"]}
+tokio = { version = "1.51.1", features = ["net","rt-multi-thread","signal"] }
 serde = { version = "1.0.228", features = ["derive"] }
-serde_json = "1.0.145"
-uuid = { version = "1.19.0", features = ["v4", "serde"] }
+serde_json = "1.0.149"
+uuid = { version = "1.23.0", features = ["v4", "serde"] }
 tower-http = { version = "0.6.8", features = ["timeout"] }
-tracing = "0.1.43"
-tracing-subscriber = "0.3.22"
-chrono = { version = "0.4.42", features = ["serde"] }
+tracing = "0.1.44"
+tracing-subscriber = "0.3.23"
+chrono = { version = "0.4.44", features = ["serde"] }
 base64 = "0.22.1"
-rand = "0.9.2"
-url = "2.5.7"
-clap = { version = "4.5.53", features = ["derive"] }
-handlebars = {version = "6.3.2", features = ["rust-embed","dir_source"]}
-rust-embed={version ="8.9.0", features = ["include-exclude"]}
+rand = "0.10.1"
+url = "2.5.8"
+clap = { version = "4.6.0", features = ["derive"] }
+handlebars = {version = "6.4.0", features = ["rust-embed","dir_source"]}
+rust-embed={version ="8.11.0", features = ["include-exclude"]}
 cookie = "0.18.1"
 
 

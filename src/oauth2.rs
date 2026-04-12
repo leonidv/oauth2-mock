@@ -20,6 +20,7 @@ pub(crate) struct AuthorizationQuery {
     pub(crate) redirect_uri: String,
     pub(crate) scope: Option<String>,
     pub(crate) state: Option<String>,
+    pub(crate) previous_state: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
