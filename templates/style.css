@@ -6,6 +6,7 @@ body {
     color: #3c4043;
     --warn-color: #c62e35;
     --body-separator-color: #dadce0;
+    --link-color: #007bff;
 }
 
 header {
@@ -34,6 +35,10 @@ footer a:hover {
     text-decoration: underline;
 }
 
+p {
+    margin: 0.5rem 0;
+}
+
 h1 {
     margin: 0;
     color: #4a4d50;
@@ -48,8 +53,13 @@ h3 {
     margin-bottom: 0px;
 }
 
+section {
+    margin-top: 0;
+    padding-left: 1.5rem;
+}
+
 a {
-    color: #007bff;
+    color: var(--link-color);
     text-decoration: none;
 }
 
@@ -178,7 +188,7 @@ code {
 .users-list {
     margin-bottom: 1rem;
     list-style: none;
-    padding-left: 1rem;
+    padding: 0;
 }
 
 .users-list li {
@@ -196,12 +206,39 @@ code {
 /* Error links styles */
 .error-links {
     list-style: none;
-    padding-left: 1rem;
     margin: 0;
+    padding: 0;
 }
 
 .error-links li {
     margin: 0.5rem 0;
 }
 
+.input-state {
+    margin-top: 0.75rem;
+}
 
+/* Hint styles */
+.hint {
+    cursor: default;
+    color: var(--link-color);
+    font-size: smaller;
+}
+
+#error-hint {
+    position: absolute;
+    background: #333;
+    color: white;
+    padding: 10px;
+    border-radius: 4px;
+    font-size: 14px;
+    max-width: 300px;
+    z-index: 1000;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 500ms ease-in-out;
+}
+
+#error-hint.show {
+    opacity: 1;
+}
