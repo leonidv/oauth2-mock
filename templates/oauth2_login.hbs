@@ -3,89 +3,84 @@
 
 {{#*inline "script"}}
 function changeState() {
-const newStateValue = document.getElementById('state').value;
-const url = new URL(window.location.href);
-const currentState = url.searchParams.get('state');
+    const newStateValue = document.getElementById('state').value;
+    const url = new URL(window.location.href);
+    const currentState = url.searchParams.get('state');
 
-if (currentState) {
-url.searchParams.set('state', newStateValue);
-url.searchParams.set('previous_state', currentState);
-} else {
-url.searchParams.set('state', newStateValue);
-}
+    if (currentState) {
+        url.searchParams.set('state', newStateValue);
+        url.searchParams.set('previous_state', currentState);
+    } else {
+        url.searchParams.set('state', newStateValue);
+    }
 
-window.location.href = url.toString();
+    window.location.href = url.toString();
 }
 
 let currentHint = null;
 
 function showHint(error) {
-if (currentHint) return; // Prevent multiple hints
+    if (currentHint) return; // Prevent multiple hints
 
-let message = '';
-switch(error) {
-case 'invalid_request':
-message = 'The request is missing a required parameter, includes an invalid parameter value, or is otherwise
-malformed.';
-break;
-case 'unauthorized_client':
-message = 'The client is not authorized to request an authorization code using this method.';
-break;
-case 'access_denied':
-message = 'The resource owner or authorization server denied the request.';
-break;
-case 'unsupported_response_type':
-message = 'The authorization server does not support obtaining an authorization code using this method.';
-break;
-case 'invalid_scope':
-message = 'The requested scope is invalid, unknown, or malformed.';
-break;
-case 'server_error':
-message = 'The authorization server encountered an unexpected condition that prevented it from fulfilling the request.';
-break;
-case 'temporarily_unavailable':
-message = 'The authorization server is currently unable to handle the request due to a temporary overloading or
-maintenance of the server.';
-break;
-default:
-message = 'Unknown error.';
-}
+    let message = '';
+    switch (error) {
+        case 'unauthorized_client':
+            message = 'The client is not authorized to request an authorization code using this method.';
+            break;
+        case 'access_denied':
+            message = 'The resource owner or authorization server denied the request.';
+            break;
+        case 'unsupported_response_type':
+            message = 'The authorization server does not support obtaining an authorization code using this method.';
+            break;
+        case 'invalid_scope':
+            message = 'The requested scope is invalid, unknown, or malformed.';
+            break;
+        case 'server_error':
+            message = 'The authorization server encountered an unexpected condition that prevented it from fulfilling the request.';
+            break;
+        case 'temporarily_unavailable':
+            message = 'The authorization server is currently unable to handle the request due to a temporary overloading or maintenance of the server.';
+            break;
+        default:
+            message = 'Unknown error.';
+    }
 
-// Create and show hint element
-const hint = document.createElement('div');
-hint.id = 'error-hint';
-hint.textContent = message;
+    // Create and show hint element
+    const hint = document.createElement('div');
+    hint.id = 'error-hint';
+    hint.textContent = message;
 
-// Position the hint near the cursor
-document.addEventListener('mousemove', updateHintPosition);
+    // Position the hint near the cursor
+    document.addEventListener('mousemove', updateHintPosition);
 
-document.body.appendChild(hint);
+    document.body.appendChild(hint);
 
-// Trigger reflow to ensure transition works
-void hint.offsetWidth;
-hint.classList.add('show');
+    // Trigger reflow to ensure transition works
+    void hint.offsetWidth;
+    hint.classList.add('show');
 
-currentHint = hint;
+    currentHint = hint;
 }
 
 function updateHintPosition(e) {
-if (currentHint) {
-currentHint.style.left = (e.pageX + 10) + 'px';
-currentHint.style.top = (e.pageY + 10) + 'px';
-}
+    if (currentHint) {
+        currentHint.style.left = (e.pageX + 10) + 'px';
+        currentHint.style.top = (e.pageY + 10) + 'px';
+    }
 }
 
 function hideHint() {
-if (currentHint) {
-currentHint.classList.remove('show');
-// Wait for transition to complete before removing
-if (currentHint) {
-document.body.removeChild(currentHint);
-currentHint = null;
-}
+    if (currentHint) {
+        currentHint.classList.remove('show');
+        // Wait for transition to complete before removing
+        if (currentHint) {
+            document.body.removeChild(currentHint);
+            currentHint = null;
+        }
 
-document.removeEventListener('mousemove', updateHintPosition);
-}
+        document.removeEventListener('mousemove', updateHintPosition);
+    }
 }
 {{/inline}}
 
@@ -109,24 +104,23 @@ document.removeEventListener('mousemove', updateHintPosition);
         <h3>Errors</h3>
         <section>
             <ul class="error-links">
-                <li><span class="hint" onmouseover="showHint('invalid_request')" onmouseout="hideHint()">ℹ️</span> <a
-                        href="/error?error=invalid_request">invalid_request</a></li>
                 <li><span class="hint" onmouseover="showHint('unauthorized_client')" onmouseout="hideHint()">ℹ️</span>
-                    <a href="/error?error=unauthorized_client">unauthorized_client</a>
+                    <a href="/authorize?error=unauthorized_client&{{../auth_params}}">unauthorized_client</a>
                 </li>
                 <li><span class="hint" onmouseover="showHint('access_denied')" onmouseout="hideHint()"> ℹ️</span> <a
-                        href="/error?error=access_denied">access_denied</a></li>
+                        href="/authorize?error=access_denied&{{../auth_params}}">access_denied</a></li>
                 <li><span class="hint" onmouseover="showHint('unsupported_response_type')"
                         onmouseout="hideHint()">ℹ️</span> <a
-                        href="/error?error=unsupported_response_type">unsupported_response_type</a></li>
+                        href="/authorize?error=unsupported_response_type&{{../auth_params}}">unsupported_response_type</a></li>
                 <li><span class="hint" onmouseover="showHint('invalid_scope')" onmouseout="hideHint()">ℹ️</span> <a
-                        href="/error?error=invalid_scope">invalid_scope</a></li>
+                        href="/authorize?error=invalid_scope&{{../auth_params}}">invalid_scope</a></li>
                 <li><span class="hint" onmouseover="showHint('server_error')" onmouseout="hideHint()">ℹ️</span> <a
-                        href="/error?error=server_error">server_error</a></li>
+                        href="/authorize?error=server_error&{{../auth_params}}">server_error</a></li>
                 <li><span class="hint" onmouseover="showHint('temporarily_unavailable')"
                         onmouseout="hideHint()">ℹ️</span> <a
-                        href="/error?error=temporarily_unavailable">temporarily_unavailable</a></li>
+                        href="/authorize?error=temporarily_unavailable&{{../auth_params}}">temporarily_unavailable</a></li>
             </ul>
+            <p>Read <a href="https://datatracker.ietf.org/doc/html/rfc6749#section-4.1.2.1">RFC-6749 4.1.2.1</a> for more information</p>
         </section>
         <h3>Change state</h3>
         <section>

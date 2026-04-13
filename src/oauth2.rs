@@ -1,3 +1,5 @@
+use std::rc::Rc;
+
 use axum::{
     body::Body,
     extract::{Form, OriginalUri, Query, State},
@@ -5,6 +7,7 @@ use axum::{
     response::{Html, IntoResponse, Json, Response},
 };
 use axum_extra::extract::SignedCookieJar;
+use chrono::format;
 use serde::{Deserialize, Serialize};
 use tracing::{info, warn};
 
@@ -15,6 +18,7 @@ use crate::AppState;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub(crate) struct AuthorizationQuery {
     pub(crate) login: Option<String>, // Store the selected user key
+    pub(crate) error: Option<String>, // Return error instead of code
     pub(crate) response_type: String,
     pub(crate) client_id: String,
     pub(crate) redirect_uri: String,
@@ -68,24 +72,40 @@ pub async fn login(
 ///
 /// Return user login as code if user is defined in configuration
 pub async fn authorize(
-    State(state): State<AppState>,
+    State(app_state): State<AppState>,
     Query(params): Query<AuthorizationQuery>,
 ) -> Response {
     info!("Authorization request: {:?}", params);
 
-    if params.client_id.is_empty() {
+    let params = Rc::new(params);
+
+    let AuthorizationQuery {
+        login,
+        error,
+        response_type,
+        client_id,
+        redirect_uri,
+        scope,
+        state,
+        previous_state,
+    } = params.as_ref();
+
+    // https://datatracker.ietf.org/doc/html/rfc6749#section-4.1.2.1
+    // Should return 400 BAD_REQUEST for cases:
+    // -- invalid or incorrect redirect_uri
+    // -- missing client_id
+    if client_id.is_empty() {
         let msg = format!("client_id is required and can't be empty string");
         warn!(msg);
         return (StatusCode::BAD_REQUEST, msg).into_response();
     }
 
-    if params.redirect_uri.is_empty() {
+    if redirect_uri.is_empty() {
         let msg = format!("redirect_uri is required and can't be empty string");
         warn!(msg);
         return (StatusCode::BAD_REQUEST, msg).into_response();
     }
 
-    let redirect_uri = params.redirect_uri;
 
     let parsed_redirect_uri = url::Url::parse(&redirect_uri);
     if parsed_redirect_uri.is_err() {
@@ -98,56 +118,76 @@ pub async fn authorize(
     }
     let mut parsed_redirect_uri = parsed_redirect_uri.unwrap();
 
-    let response_302 = Response::builder().status(StatusCode::FOUND);
+
+    if params.error.is_some() {
+        let error = error.clone().unwrap_or("".to_string());
+        if error.is_empty() {
+            let msg = "Error MUST be provided or not passed";
+            return (StatusCode::BAD_REQUEST, msg).into_response();
+        }
+
+        return client_error(error, "Explicit error from oauth2-mock".to_string(), params.clone());
+    }
 
     // Validate required parameters
     if params.response_type != "code" {
-        let redirect_uri = format!("{}?error=unsupported_response_type", redirect_uri);
-        let msg = format!(
+       let msg = format!(
             "Invalid response_type: {}. Only code is allowed",
             params.response_type
         );
-        warn!(msg);
-        return response_302
-            .header("Location", redirect_uri)
-            .body(Body::from(msg))
-            .unwrap();
+        return client_error("unsupported_response_type", &msg, params.clone());
     }
 
-    let login = params.login.unwrap_or("".to_string());
+    let login = login.clone().unwrap_or("".to_string());
 
     if login.is_empty() {
-        let redirect_uri = format!("{}?error=invalid_request", redirect_uri);
-        let msg = "login is required and can't be empty string".to_string();
-        return response_302
-            .header("Location", redirect_uri)
-            .body(Body::from(msg))
-            .unwrap();
+        let msg = "login or error is required and can't be empty string";
+        return client_error("invalid_request", msg, params.clone());
     }
 
-    if !state.users.contains_login(&login) {
-        let redirect_uri = format!("{}?error=access_denied", redirect_uri);
+    if !app_state.users.contains_login(&login) {
         let msg = format!("User {} not found", login);
-        warn!(msg);
-        return response_302
-            .header("Location", redirect_uri)
-            .body(Body::from(msg))
-            .unwrap();
+        return client_error("access_denied", &msg, params.clone());
     }
 
-    let code = state.authorization_codes.get(&login).unwrap();
+    let response_302 = Response::builder().status(StatusCode::FOUND);
+
+    let code = app_state.authorization_codes.get(&login).unwrap();
     parsed_redirect_uri
         .query_pairs_mut()
         .append_pair("code", &code);
 
-    if let Some(state) = params.state {
+    if let Some(state) = &params.clone().state {
         parsed_redirect_uri
             .query_pairs_mut()
-            .append_pair("state", &state);
+            .append_pair("state", state);
     }
 
     response_302
         .header("Location", parsed_redirect_uri.to_string())
+        .body(Body::empty())
+        .unwrap()
+}
+
+/// Generate client redirect error with provided error
+fn client_error<S: Into<String> + std::fmt::Display>(
+    error: S,
+    error_description: S,
+    query: Rc<AuthorizationQuery>,
+) -> Response {
+    let redirect_uri = &query.redirect_uri;
+    let state = query
+        .state
+        .clone()
+        .map_or("".to_string(), |s| format!("&state={}", s));
+    let location =
+        format!("{redirect_uri}?error={error}&error_description={error_description}{state}");
+
+    info!("{error_description}");
+
+    Response::builder()
+        .status(StatusCode::FOUND)
+        .header("Location", location)
         .body(Body::empty())
         .unwrap()
 }
