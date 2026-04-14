@@ -1,7 +1,72 @@
 {{#*inline "style"}}
+.tabs {
+    margin-bottom: 0;
+    border-bottom: 1px solid #ddd;
+}
+
+.tab-button {
+    background-color: #f8f9fa;
+    border: 1px solid #ddd;
+    border-bottom: none;
+    padding: 10px 15px;
+    cursor: pointer;
+    margin-right: 5px;
+    border-radius: 5px 5px 0 0;
+}
+
+.tab-button.active {
+    background-color: #fff;
+    border-bottom: 1px solid #fff;
+    margin-bottom: -1px;
+    font-weight: bold;
+}
+
+.tab-content {
+    display: none;
+    padding: 15px;
+    border: 1px solid #ddd;
+    border-top: none;
+    border-radius: 0 5px 5px 5px;
+    background-color: #fff;
+}
+
+.form-group {
+    margin-bottom: 15px;
+}
+
+.form-group label {
+    display: block;
+    margin-bottom: 5px;
+    font-weight: bold;
+}
+
+.combo-box {
+    width: 100%;
+    padding: 8px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+}
 {{/inline}}
 
 {{#*inline "script"}}
+function openTab(evt, tabName) {
+    // Hide all tab content
+    const tabContents = document.getElementsByClassName("tab-content");
+    for (let i = 0; i < tabContents.length; i++) {
+        tabContents[i].style.display = "none";
+    }
+
+    // Remove 'active' class from all tab buttons
+    const tabButtons = document.getElementsByClassName("tab-button");
+    for (let i = 0; i < tabButtons.length; i++) {
+        tabButtons[i].className = tabButtons[i].className.replace(" active", "");
+    }
+
+    // Show the current tab and add 'active' class to the button
+    document.getElementById(tabName).style.display = "block";
+    evt.currentTarget.className += " active";
+}
+
 function changeState() {
     const newStateValue = document.getElementById('state').value;
     const url = new URL(window.location.href);
@@ -101,33 +166,65 @@ function hideHint() {
     </div>
     <div class="oauth2-container-panel">
         <h2>Non-positive Cases</h2>
-        <h3>Errors</h3>
-        <section>
-            <ul class="error-links">
-                <li><span class="hint" onmouseover="showHint('unauthorized_client')" onmouseout="hideHint()">ℹ️</span>
-                    <a href="/authorize?error=unauthorized_client&{{../auth_params}}">unauthorized_client</a>
-                </li>
-                <li><span class="hint" onmouseover="showHint('access_denied')" onmouseout="hideHint()"> ℹ️</span> <a
-                        href="/authorize?error=access_denied&{{../auth_params}}">access_denied</a></li>
-                <li><span class="hint" onmouseover="showHint('unsupported_response_type')"
-                        onmouseout="hideHint()">ℹ️</span> <a
-                        href="/authorize?error=unsupported_response_type&{{../auth_params}}">unsupported_response_type</a></li>
-                <li><span class="hint" onmouseover="showHint('invalid_scope')" onmouseout="hideHint()">ℹ️</span> <a
-                        href="/authorize?error=invalid_scope&{{../auth_params}}">invalid_scope</a></li>
-                <li><span class="hint" onmouseover="showHint('server_error')" onmouseout="hideHint()">ℹ️</span> <a
-                        href="/authorize?error=server_error&{{../auth_params}}">server_error</a></li>
-                <li><span class="hint" onmouseover="showHint('temporarily_unavailable')"
-                        onmouseout="hideHint()">ℹ️</span> <a
-                        href="/authorize?error=temporarily_unavailable&{{../auth_params}}">temporarily_unavailable</a></li>
-            </ul>
-            <p>Read <a href="https://datatracker.ietf.org/doc/html/rfc6749#section-4.1.2.1">RFC-6749 4.1.2.1</a> for more information</p>
-        </section>
-        <h3>Change state</h3>
-        <section>
-            <input id="state" class="input-state" type="text" value="{{state}}"> <button onclick="changeState()">Change</button>
-            {{#if state_changed }}<p>Previous state: <span class="monospace" style="word-wrap: anywhere;">{{
-                    previous_state }}</span> </p> {{/if}}
-        </section>
+        
+        <!-- Tabs -->
+        <div class="tabs">
+            <button class="tab-button active" onclick="openTab(event, 'access-code')">Access code</button>
+            <button class="tab-button" onclick="openTab(event, 'access-token')">Access token</button>
+        </div>
+
+        <!-- Tab Content -->
+        <div id="access-code" class="tab-content" style="display: block;">
+            <h3>Errors</h3>
+            <section>
+                <ul class="error-links">
+                    <li><span class="hint" onmouseover="showHint('unauthorized_client')" onmouseout="hideHint()">ℹ️</span>
+                        <a href="/authorize?error=unauthorized_client&{{../auth_params}}">unauthorized_client</a>
+                    </li>
+                    <li><span class="hint" onmouseover="showHint('access_denied')" onmouseout="hideHint()"> ℹ️</span> <a
+                            href="/authorize?error=access_denied&{{../auth_params}}">access_denied</a></li>
+                    <li><span class="hint" onmouseover="showHint('unsupported_response_type')"
+                            onmouseout="hideHint()">ℹ️</span> <a
+                            href="/authorize?error=unsupported_response_type&{{../auth_params}}">unsupported_response_type</a></li>
+                    <li><span class="hint" onmouseover="showHint('invalid_scope')" onmouseout="hideHint()">ℹ️</span> <a
+                            href="/authorize?error=invalid_scope&{{../auth_params}}">invalid_scope</a></li>
+                    <li><span class="hint" onmouseover="showHint('server_error')" onmouseout="hideHint()">ℹ️</span> <a
+                            href="/authorize?error=server_error&{{../auth_params}}">server_error</a></li>
+                    <li><span class="hint" onmouseover="showHint('temporarily_unavailable')"
+                            onmouseout="hideHint()">ℹ️</span> <a
+                            href="/authorize?error=temporarily_unavailable&{{../auth_params}}">temporarily_unavailable</a></li>
+                </ul>
+                <p>Read <a href="https://datatracker.ietf.org/doc/html/rfc6749#section-4.1.2.1">RFC-6749 4.1.2.1</a> for more information</p>
+            </section>
+            <h3>Change state</h3>
+            <section>
+                <input id="state" class="input-state" type="text" value="{{state}}"> <button onclick="changeState()">Change</button>
+                {{#if state_changed }}<p>Previous state: <span class="monospace" style="word-wrap: anywhere;">{{
+                        previous_state }}</span> </p> {{/if}}
+            </section>
+        </div>
+
+        <div id="access-token" class="tab-content" style="display: none;">
+            <div class="form-group">
+                <label for="user-select">User:</label>
+                <select id="user-select" class="combo-box">
+                    {{#each users}}
+                    <option value="{{login}}">{{login}}</option>
+                    {{/each}}
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="error-select">Error:</label>
+                <select id="error-select" class="combo-box">
+                    <option value="invalid_request">invalid_request</option>
+                    <option value="invalid_client">invalid_client</option>
+                    <option value="invalid_grant">invalid_grant</option>
+                    <option value="unauthorized_client">unauthorized_client</option>
+                    <option value="unsupported_grant_type">unsupported_grant_type</option>
+                    <option value="invalid_scope">invalid_scope</option>
+                </select>
+            </div>
+        </div>
     </div>
 </div>
 {{/inline}}
