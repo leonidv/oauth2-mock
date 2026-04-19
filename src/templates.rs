@@ -109,6 +109,7 @@ impl Templates {
 
 fn load_templates() -> Result<Handlebars<'static>, Box<dyn std::error::Error>> {
     let mut hbs = Handlebars::new();
+    hbs.register_escape_fn(handlebars::no_escape);
     if cfg!(feature = "devmode") {
         info!("devmode: activate templates hot reload");
         hbs.set_dev_mode(true);

@@ -30,6 +30,10 @@
     background-color: #fff;
 }
 
+.tab-content > h3:first-child {
+    margin-top: 0;
+}
+
 .form-group {
     margin-bottom: 15px;
 }
@@ -49,6 +53,66 @@
 {{/inline}}
 
 {{#*inline "script"}}
+// Error descriptions based on RFC6749
+const errorDescriptions = {
+    'invalid_request': 'The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed.',
+    'invalid_client': 'Client authentication failed (e.g., unknown client, no client authentication included, or unsupported authentication method).',
+    'invalid_grant': 'The provided authorization grant (e.g., authorization code, resource owner credentials) or refresh token is invalid, expired, revoked, does not match the redirection URI used in the authorization request, or was issued to another client.',
+    'unauthorized_client': 'The client is not authorized to request an authorization code using this method.',
+    'unsupported_grant_type': 'The authorization grant type is not supported by the authorization server.',
+    'invalid_scope': 'The requested scope is invalid, unknown, or malformed.',
+    'server_error': 'The authorization server encountered an unexpected condition that prevented it from fulfilling the request.',
+    'temporarily_unavailable': 'The authorization server is currently unable to handle the request due to a temporary overloading or maintenance of the server.'
+};
+
+function showErrorDescription() {
+    const errorSelect = document.getElementById('error-select');
+    const errorDescription = document.getElementById('error-description');
+    const selectedError = errorSelect.value;
+    
+    if (selectedError && errorDescriptions[selectedError]) {
+        errorDescription.textContent = errorDescriptions[selectedError];
+        errorDescription.style.display = 'block';
+    } else {
+        errorDescription.style.display = 'none';
+    }
+}
+
+// Parse auth_params and create hidden form fields
+function parseAuthParams(authParams) {
+    if (!authParams) return [];
+    
+    // Split the params string by & and parse each key-value pair
+    return authParams.split('&').map(param => {
+        const [key, value] = param.split('=');
+        return { key: decodeURIComponent(key), value: decodeURIComponent(value || '') };
+    }).filter(param => param.key); // Filter out any empty keys
+}
+
+// Generate hidden input fields from parsed params
+function createHiddenFields(form, params) {
+    params.forEach(param => {
+        const input = document.createElement('input');
+        input.type = 'hidden';
+        input.name = param.key;
+        input.value = param.value;
+        form.appendChild(input);
+    });
+}
+
+// Show description for default selected error on page load
+window.addEventListener('load', function() {
+    showErrorDescription();
+    
+    // Add auth_params as hidden fields to the access token error form
+    const authParams = '{{auth_params}}';
+    const parsedParams = parseAuthParams(authParams);
+    const form = document.getElementById('access-token-error');
+    if (form) {
+        createHiddenFields(form, parsedParams);
+    }
+});
+
 function openTab(evt, tabName) {
     // Hide all tab content
     const tabContents = document.getElementsByClassName("tab-content");
@@ -176,27 +240,27 @@ function hideHint() {
         <!-- Tab Content -->
         <div id="access-code" class="tab-content" style="display: block;">
             <h3>Errors</h3>
+            <p>Read <a href="https://datatracker.ietf.org/doc/html/rfc6749#section-4.1.2.1">RFC-6749 4.1.2.1</a> for more information</p>
             <section>
                 <ul class="error-links">
                     <li><span class="hint" onmouseover="showHint('unauthorized_client')" onmouseout="hideHint()">ℹ️</span>
-                        <a href="/authorize?error=unauthorized_client&{{../auth_params}}">unauthorized_client</a>
+                        <a href="/authorize?error_type=access_code&error=unauthorized_client&{{../auth_params}}">unauthorized_client</a>
                     </li>
                     <li><span class="hint" onmouseover="showHint('access_denied')" onmouseout="hideHint()"> ℹ️</span> <a
-                            href="/authorize?error=access_denied&{{../auth_params}}">access_denied</a></li>
+                            href="/authorize?error_type=access_code&error=access_denied&{{../auth_params}}">access_denied</a></li>
                     <li><span class="hint" onmouseover="showHint('unsupported_response_type')"
                             onmouseout="hideHint()">ℹ️</span> <a
-                            href="/authorize?error=unsupported_response_type&{{../auth_params}}">unsupported_response_type</a></li>
+                            href="/authorize?error_type=access_code&error=unsupported_response_type&{{../auth_params}}">unsupported_response_type</a></li>
                     <li><span class="hint" onmouseover="showHint('invalid_scope')" onmouseout="hideHint()">ℹ️</span> <a
-                            href="/authorize?error=invalid_scope&{{../auth_params}}">invalid_scope</a></li>
+                            href="/authorize?error=error_type=access_code&invalid_scope&{{../auth_params}}">invalid_scope</a></li>
                     <li><span class="hint" onmouseover="showHint('server_error')" onmouseout="hideHint()">ℹ️</span> <a
-                            href="/authorize?error=server_error&{{../auth_params}}">server_error</a></li>
+                            href="/authorize?error_type=access_code&error=server_error&{{../auth_params}}">server_error</a></li>
                     <li><span class="hint" onmouseover="showHint('temporarily_unavailable')"
                             onmouseout="hideHint()">ℹ️</span> <a
                             href="/authorize?error=temporarily_unavailable&{{../auth_params}}">temporarily_unavailable</a></li>
-                </ul>
-                <p>Read <a href="https://datatracker.ietf.org/doc/html/rfc6749#section-4.1.2.1">RFC-6749 4.1.2.1</a> for more information</p>
+                </ul>                
             </section>
-            <h3>Change state</h3>
+            <h3>State</h3>
             <section>
                 <input id="state" class="input-state" type="text" value="{{state}}"> <button onclick="changeState()">Change</button>
                 {{#if state_changed }}<p>Previous state: <span class="monospace" style="word-wrap: anywhere;">{{
@@ -205,25 +269,33 @@ function hideHint() {
         </div>
 
         <div id="access-token" class="tab-content" style="display: none;">
-            <div class="form-group">
-                <label for="user-select">User:</label>
-                <select id="user-select" class="combo-box">
-                    {{#each users}}
-                    <option value="{{login}}">{{login}}</option>
-                    {{/each}}
-                </select>
-            </div>
-            <div class="form-group">
-                <label for="error-select">Error:</label>
-                <select id="error-select" class="combo-box">
-                    <option value="invalid_request">invalid_request</option>
-                    <option value="invalid_client">invalid_client</option>
-                    <option value="invalid_grant">invalid_grant</option>
-                    <option value="unauthorized_client">unauthorized_client</option>
-                    <option value="unsupported_grant_type">unsupported_grant_type</option>
-                    <option value="invalid_scope">invalid_scope</option>
-                </select>
-            </div>
+            <p>Read <a href="https://datatracker.ietf.org/doc/html/rfc6749#section-5.2">RFC-6749 5.2</a> for more information</p>
+            <form id="access-token-error" method="GET" action="/authorize">
+                <input type="hidden" name="error_type" value="access_token"/>
+                <div class="form-group">
+                    <label for="user-select">User:</label>
+                    <select id="user-select" class="combo-box" name="login">
+                        {{#each users}}
+                        <option value="{{login}}">{{login}}</option>
+                        {{/each}}
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="error-select">Error:</label>
+                    <select id="error-select" class="combo-box" name="error" onchange="showErrorDescription()">
+                        <option value="invalid_request" selected>invalid_request</option>
+                        <option value="invalid_client">invalid_client</option>
+                        <option value="invalid_grant">invalid_grant</option>
+                        <option value="unauthorized_client">unauthorized_client</option>
+                        <option value="unsupported_grant_type">unsupported_grant_type</option>
+                        <option value="invalid_scope">invalid_scope</option>
+                    </select>
+                    <div id="error-description" class="error-description" style="display: none; margin-top: 10px; padding: 10px; background-color: #f8f9fa; border: 1px solid #ddd; border-radius: 4px;"></div>
+                </div>
+                <div class="form-group">
+                    <button type="submit">Send</button>
+                </div>
+            </form>
         </div>
     </div>
 </div>
