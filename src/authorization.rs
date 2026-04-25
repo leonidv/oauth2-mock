@@ -11,7 +11,7 @@ use axum_extra::extract::{
 use rand::distr::{Alphanumeric, SampleString};
 use serde::Deserialize;
 
-use crate::application_state::AppState;
+use crate::state::AppState;
 use cookie::time::Duration;
 
 impl FromRef<AppState> for Key {
@@ -115,6 +115,6 @@ pub(crate) async fn check_access(
 }
 
 /// Generate random string for signing cookies
-pub(crate) fn generate_sign_key() -> String {
+pub fn generate_sign_key() -> String {
     Alphanumeric.sample_string(&mut rand::rng(), 64)
 }

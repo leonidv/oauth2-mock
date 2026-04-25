@@ -1,12 +1,11 @@
+
 use std::{collections::HashMap, sync::Arc};
 
 use axum_extra::extract::cookie::Key;
 use uuid::Uuid;
 
-use crate::{
-    configuration::{ApplicationConfiguration, RegisteredUsers, User},
-    templates::Templates,
-};
+use crate::{configuration::{ApplicationConfiguration, RegisteredUsers, User}, templates::Templates};
+
 
 #[derive(Debug, Clone)]
 pub(crate) struct AppState {
@@ -94,3 +93,4 @@ impl AppState {
         }
     }
 }
+

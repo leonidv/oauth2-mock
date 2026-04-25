@@ -6,7 +6,7 @@ use serde::Serialize;
 use tracing::info;
 
 use crate::{
-    CHECK_ACCESS_CODE_PATH, configuration::{RegisteredUsers, User}, oauth2::AuthorizationQuery
+    configuration::{RegisteredUsers, User}, oauth2::AuthorizationQuery, router::CHECK_ACCESS_CODE_PATH
 };
 
 #[derive(Embed)]
@@ -44,19 +44,19 @@ struct AuthorizeFormVariables {
 }
 
 impl Templates {
-    pub fn load() -> Self {
+    pub(crate) fn load() -> Self {
         let handlebars = load_templates().unwrap();
         Self { handlebars }
     }
 
-    pub fn render_home(&self, users: &RegisteredUsers) -> String {
+    pub(crate) fn render_home(&self, users: &RegisteredUsers) -> String {
         let mut users = Vec::from_iter(users.all().iter().map(|v| v.clone()));
         users.sort_by(|a, b| a.login.cmp(&b.login));
         let data = HomeVariables { users };
         self.handlebars.render("home", &data).unwrap()
     }
 
-    pub fn render_authorize_form(&self, uri : OriginalUri, show_error : bool) -> String {
+    pub(crate) fn render_authorize_form(&self, uri : OriginalUri, show_error : bool) -> String {
         let return_to = uri.0.to_string();
         let data = AuthorizeFormVariables {
             action_url: CHECK_ACCESS_CODE_PATH.to_string(),
@@ -66,7 +66,7 @@ impl Templates {
         self.handlebars.render("access_code_form", &data).unwrap()
     }
 
-    pub fn render_oauth2_login(
+    pub(crate) fn render_oauth2_login(
         &self,
         users: &RegisteredUsers,
         auth_request: &AuthorizationQuery,
@@ -102,7 +102,7 @@ impl Templates {
         self.handlebars.render("oauth2_login", &data).unwrap()
     }
 
-    pub fn css(&self) -> &str {
+    pub(crate) fn css(&self) -> &str {
         return CSS_FILE;
     }
 }

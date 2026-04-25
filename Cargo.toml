@@ -5,12 +5,12 @@ edition = "2024"
 
 
 [dependencies]
-axum = {version = "0.8.8", features = ["macros"]}
-axum-extra = {version = "0.12.5", features = ["cookie","cookie-signed"]}
-tokio = { version = "1.51.1", features = ["net","rt-multi-thread","signal"] }
+axum = {version = "0.8.9", features = ["macros"]}
+axum-extra = {version = "0.12.6", features = ["cookie","cookie-signed"]}
+tokio = { version = "1.52.1", features = ["net","rt-multi-thread","signal"] }
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.149"
-uuid = { version = "1.23.0", features = ["v4", "serde"] }
+uuid = { version = "1.23.1", features = ["v4", "serde"] }
 tower-http = { version = "0.6.8", features = ["timeout"] }
 tracing = "0.1.44"
 tracing-subscriber = "0.3.23"
@@ -18,11 +18,14 @@ chrono = { version = "0.4.44", features = ["serde"] }
 base64 = "0.22.1"
 rand = "0.10.1"
 url = "2.5.8"
-clap = { version = "4.6.0", features = ["derive"] }
+clap = { version = "4.6.1", features = ["derive"] }
 handlebars = {version = "6.4.0", features = ["rust-embed","dir_source"]}
 rust-embed={version ="8.11.0", features = ["include-exclude"]}
 cookie = "0.18.1"
 
+[dev-dependencies]
+behave ={ version = "0.9.2", features = ["http","url"]}
+axum-test = "20.0.0"
 
 [features]
 devmode = []

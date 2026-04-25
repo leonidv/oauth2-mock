@@ -11,8 +11,7 @@ use serde::{Deserialize, Serialize};
 use tracing::{info, warn};
 
 use crate::authorization::{AuthorizationState, SignedCookieJarAuthorized};
-
-use crate::AppState;
+use crate::state::AppState;
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -93,9 +92,9 @@ pub async fn authorize(
         response_type,
         client_id,
         redirect_uri,
-        scope,
+        scope : _,
         state,
-        previous_state,
+        previous_state:_,
     } = params.as_ref();
 
     // https://datatracker.ietf.org/doc/html/rfc6749#section-4.1.2.1
