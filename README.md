@@ -11,6 +11,7 @@ This server is designed **only** for testing OAuth2 flows in development and tes
 - **Access Restriction**: Simple way restrict access to your demo environments.
 - **Authorization Code Flow**: Complete implementation of the OAuth2 authorization code grant type
 - **User Info Endpoint**: Retrieve user information specific to the authorized user
+- **Negative scenarios**: Test how clients process error on getting access code and access token
 
 
 ![Authorization page](images/authorization_page.png)
