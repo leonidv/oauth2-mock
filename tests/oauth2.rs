@@ -1,21 +1,11 @@
-use std::collections::HashMap;
+mod commons;
 
+use std::collections::HashMap;
 use axum::http::StatusCode;
-use axum_test::TestServer;
 use behave::prelude::*;
-use oauth2_mock::{
-    configuration::ApplicationConfiguration, router::setup_router, state::AppState,
-    templates::Templates,
-};
 use yare::parameterized;
 
-fn setup_server() -> TestServer {
-    let cfg = ApplicationConfiguration::default();
-    let templates = Templates::load();
-    let state = AppState::new(&cfg, templates);
-    let app = setup_router(state);
-    return TestServer::builder().save_cookies().build(app);
-}
+use commons::setup_server;
 
 #[tokio::test]
 async fn code_token_and_info() -> Result<(), Box<dyn std::error::Error>> {
@@ -196,4 +186,43 @@ async fn access_token_explicit_errors(error: &str) -> Result<(), Box<dyn std::er
 
 
     Ok(())
+}
+
+#[parameterized(
+    missing_response_type = { "?client_id=123&redirect_uri=http://localhost", "response_type" },
+    missing_client_id = { "?response_type=code&redirect_uri=http://localhost", "client_id" },
+    missing_redirect_uri = { "?response_type=code&client_id=123", "redirect_uri" }
+)]
+#[test_macro(tokio::test)]
+async fn authorize_missing_required_params(extra_params: &str, missing_field: &str) {
+    let server = setup_server();
+    let url = format!("/authorize{}", extra_params);
+    let response = server.get(&url).await;
+    response.assert_status(StatusCode::BAD_REQUEST);
+    // Failed to deserialize query string: missing field `response_type`
+    let message = format!("Failed to deserialize query string: missing field `{missing_field}`");
+    response.assert_text(&message);
+}
+
+#[parameterized(
+    refresh_token = { "refresh_token" },
+    client_credentials = { "client_credentials" },
+    implicit = { "implicit" }
+)]
+#[test_macro(tokio::test)]
+async fn token_unsupported_grant_type(grant_type: &str) {
+    let server = setup_server();
+    let mut params = HashMap::new();
+    params.insert("grant_type", grant_type);
+    params.insert("code", "xxx");
+
+    let response = server
+        .post("/token")
+        .form(&params)
+        .content_type("application/x-www-form-urlencoded")
+        .await;
+
+    response.assert_status(StatusCode::BAD_REQUEST);
+    let json: serde_json::Value = response.json();
+    assert_eq!(json["error"], "unsupported_grant_type");
 }
