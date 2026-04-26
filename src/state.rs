@@ -8,7 +8,7 @@ use crate::{configuration::{ApplicationConfiguration, RegisteredUsers, User}, te
 
 
 #[derive(Debug, Clone)]
-pub(crate) struct AppState {
+pub struct AppState {
     /// signed cookie key
     pub(crate) key: Key,
 
@@ -64,7 +64,7 @@ fn link_access_token_with_user(
 }
 
 impl AppState {
-    pub(crate) fn new(app_config: &ApplicationConfiguration, templates: Templates) -> Self {
+    pub fn new(app_config: &ApplicationConfiguration, templates: Templates) -> Self {
         let users = RegisteredUsers::new(&app_config.users);
         let authorization_codes = make_uuids_per_key(&users.logins());
 

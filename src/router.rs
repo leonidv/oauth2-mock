@@ -23,8 +23,8 @@ pub(crate) const OAUTH2_LOGIN_PATH: &str = "/login";
 pub(crate) const OAUTH2_AUTHORIZATION_PATH: &str = "/authorize";
 pub(crate) const OAUTH2_TOKEN_PATH: &str = "/token";
 pub(crate) const OAUTH2_USERINFO_PATH: &str = "/userinfo";
- 
-pub(crate) fn setup_router(state: AppState) -> Router {
+
+pub fn setup_router(state: AppState) -> Router {
     Router::new()
         .route("/style.css", get(css_styles))
         .route("/", get(home))

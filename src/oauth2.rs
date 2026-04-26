@@ -92,9 +92,9 @@ pub async fn authorize(
         response_type,
         client_id,
         redirect_uri,
-        scope : _,
+        scope: _,
         state,
-        previous_state:_,
+        previous_state: _,
     } = params.as_ref();
 
     // https://datatracker.ietf.org/doc/html/rfc6749#section-4.1.2.1
@@ -132,17 +132,16 @@ pub async fn authorize(
             return (StatusCode::BAD_REQUEST, msg).into_response();
         }
 
-                if let ErrorType::AccessCode = error_type {
+        if let ErrorType::AccessCode = error_type {
             return client_error(
                 error,
                 "Explicit error from oauth2-mock".to_string(),
                 params.clone(),
             );
         }
-
     }
 
-            // Process only access code errors, because access token errors processed as correct response
+    // Process only access code errors, because access token errors processed as correct response
 
     // Validate required parameters
     if response_type != "code" {
@@ -156,7 +155,7 @@ pub async fn authorize(
     let login = login.clone().unwrap_or("".to_string());
 
     if login.is_empty() {
-        let msg = "login or error is required and can't be empty string";
+        let msg = "login is required and can't be empty string";
         return client_error("invalid_request", msg, params.clone());
     }
 
@@ -168,9 +167,13 @@ pub async fn authorize(
     let response_302 = Response::builder().status(StatusCode::FOUND);
 
     let code = if let Some(ErrorType::AccessToken) = error_type {
-       error.as_ref().unwrap().to_string()
+        error.as_ref().unwrap().to_string()
     } else {
-        app_state.authorization_codes.get(&login).unwrap().to_string()
+        app_state
+            .authorization_codes
+            .get(&login)
+            .unwrap()
+            .to_string()
     };
 
     parsed_redirect_uri
@@ -226,9 +229,11 @@ pub async fn access_token(
     // Handle authorization code flow
     let code = token_request.code;
 
-    if code.starts_with("invalid") || code.starts_with("unauthorized") {
-        let body = Body::from(format!("{{ error: \"{code}\" }}"));
-        return (StatusCode::BAD_REQUEST, body).into_response();
+    if code.starts_with("invalid") 
+        || code.starts_with("unauthorized") 
+        || code.eq_ignore_ascii_case("unsupported_grant_type")
+    {
+        return access_token_error(&code);
     };
 
     if !state.access_tokens.contains_key(&code) {
@@ -239,13 +244,14 @@ pub async fn access_token(
     let access_token = state.access_tokens.get(&code).unwrap();
     let refresh_token = state.refresh_tokens.get(&code).unwrap();
 
-    let body = AccessTokenResponse {
+    let json_body = AccessTokenResponse {
         access_token: access_token.clone(),
         token_type: "bearer".to_string(),
         expires_in: 3600,
         refresh_token: refresh_token.clone(),
     };
-    return (StatusCode::OK, Json(body)).into_response();
+
+    return (Json(json_body)).into_response();
 }
 
 /// Generate access token error with BAD_REQUEST status code
@@ -257,7 +263,7 @@ pub fn access_token_error(error: &str) -> Response {
     (StatusCode::BAD_REQUEST, Json(body)).into_response()
 }
 
-pub async fn userinfo(State(state): State<AppState>, headers: HeaderMap) -> Response {
+pub async fn userinfo(State(state): State<AppState>, headers: HeaderMap) -> impl IntoResponse {
     let header_prefix = format!("{} ", &state.authorization_header_prefix).to_string();
 
     // Extract Bearer token from Authorization header

@@ -44,7 +44,7 @@ struct AuthorizeFormVariables {
 }
 
 impl Templates {
-    pub(crate) fn load() -> Self {
+    pub fn load() -> Self {
         let handlebars = load_templates().unwrap();
         Self { handlebars }
     }

@@ -24,8 +24,10 @@ rust-embed={version ="8.11.0", features = ["include-exclude"]}
 cookie = "0.18.1"
 
 [dev-dependencies]
-behave ={ version = "0.9.2", features = ["http","url"]}
+behave ={ version = "0.9.2", features = ["http","url","tokio","json"]}
 axum-test = "20.0.0"
+rstest = "0.26.1"
+yare = "3.0.0"
 
 [features]
 devmode = []
