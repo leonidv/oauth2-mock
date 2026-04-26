@@ -1,3 +1,5 @@
+use std::rc::Rc;
+
 use axum::{
     body::Body,
     extract::{Form, OriginalUri, Query, State},
@@ -9,17 +11,26 @@ use serde::{Deserialize, Serialize};
 use tracing::{info, warn};
 
 use crate::authorization::{AuthorizationState, SignedCookieJarAuthorized};
+use crate::state::AppState;
 
-use crate::AppState;
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub(crate) enum ErrorType {
+    AccessCode,
+    AccessToken,
+}
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub(crate) struct AuthorizationQuery {
     pub(crate) login: Option<String>, // Store the selected user key
+    pub(crate) error: Option<String>, // Return error instead of code
+    pub(crate) error_type: Option<ErrorType>, // Return error when request access code or access token
     pub(crate) response_type: String,
     pub(crate) client_id: String,
     pub(crate) redirect_uri: String,
     pub(crate) scope: Option<String>,
     pub(crate) state: Option<String>,
+    pub(crate) previous_state: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -67,24 +78,40 @@ pub async fn login(
 ///
 /// Return user login as code if user is defined in configuration
 pub async fn authorize(
-    State(state): State<AppState>,
+    State(app_state): State<AppState>,
     Query(params): Query<AuthorizationQuery>,
 ) -> Response {
     info!("Authorization request: {:?}", params);
 
-    if params.client_id.is_empty() {
+    let params = Rc::new(params);
+
+    let AuthorizationQuery {
+        login,
+        error,
+        error_type,
+        response_type,
+        client_id,
+        redirect_uri,
+        scope: _,
+        state,
+        previous_state: _,
+    } = params.as_ref();
+
+    // https://datatracker.ietf.org/doc/html/rfc6749#section-4.1.2.1
+    // Should return 400 BAD_REQUEST for cases:
+    // -- invalid or incorrect redirect_uri
+    // -- missing client_id
+    if client_id.is_empty() {
         let msg = format!("client_id is required and can't be empty string");
         warn!(msg);
         return (StatusCode::BAD_REQUEST, msg).into_response();
     }
 
-    if params.redirect_uri.is_empty() {
+    if redirect_uri.is_empty() {
         let msg = format!("redirect_uri is required and can't be empty string");
         warn!(msg);
         return (StatusCode::BAD_REQUEST, msg).into_response();
     }
-
-    let redirect_uri = params.redirect_uri;
 
     let parsed_redirect_uri = url::Url::parse(&redirect_uri);
     if parsed_redirect_uri.is_err() {
@@ -97,52 +124,66 @@ pub async fn authorize(
     }
     let mut parsed_redirect_uri = parsed_redirect_uri.unwrap();
 
-    let response_302 = Response::builder().status(StatusCode::FOUND);
+    if let Some(error_type) = error_type {
+        // Guard that error is provided
+        let error = error.clone().unwrap_or("".to_string());
+        if error.is_empty() {
+            let msg = "Error MUST be provided or not passed";
+            return (StatusCode::BAD_REQUEST, msg).into_response();
+        }
+
+        if let ErrorType::AccessCode = error_type {
+            return client_error(
+                error,
+                "Explicit error from oauth2-mock".to_string(),
+                params.clone(),
+            );
+        }
+    }
+
+    // Process only access code errors, because access token errors processed as correct response
 
     // Validate required parameters
-    if params.response_type != "code" {
-        let redirect_uri = format!("{}?error=unsupported_response_type", redirect_uri);
+    if response_type != "code" {
         let msg = format!(
             "Invalid response_type: {}. Only code is allowed",
-            params.response_type
+            response_type
         );
-        warn!(msg);
-        return response_302
-            .header("Location", redirect_uri)
-            .body(Body::from(msg))
-            .unwrap();
+        return client_error("unsupported_response_type", &msg, params.clone());
     }
 
-    let login = params.login.unwrap_or("".to_string());
+    let login = login.clone().unwrap_or("".to_string());
 
     if login.is_empty() {
-        let redirect_uri = format!("{}?error=invalid_request", redirect_uri);
-        let msg = "login is required and can't be empty string".to_string();
-        return response_302
-            .header("Location", redirect_uri)
-            .body(Body::from(msg))
-            .unwrap();
+        let msg = "login is required and can't be empty string";
+        return client_error("invalid_request", msg, params.clone());
     }
 
-    if !state.users.contains_login(&login) {
-        let redirect_uri = format!("{}?error=access_denied", redirect_uri);
+    if !app_state.users.contains_login(&login) {
         let msg = format!("User {} not found", login);
-        warn!(msg);
-        return response_302
-            .header("Location", redirect_uri)
-            .body(Body::from(msg))
-            .unwrap();
+        return client_error("access_denied", &msg, params.clone());
     }
 
-    let code = state.authorization_codes.get(&login).unwrap();
+    let response_302 = Response::builder().status(StatusCode::FOUND);
+
+    let code = if let Some(ErrorType::AccessToken) = error_type {
+        error.as_ref().unwrap().to_string()
+    } else {
+        app_state
+            .authorization_codes
+            .get(&login)
+            .unwrap()
+            .to_string()
+    };
+
     parsed_redirect_uri
         .query_pairs_mut()
         .append_pair("code", &code);
 
-    if let Some(state) = params.state {
+    if let Some(state) = &state {
         parsed_redirect_uri
             .query_pairs_mut()
-            .append_pair("state", &state);
+            .append_pair("state", state);
     }
 
     response_302
@@ -151,13 +192,27 @@ pub async fn authorize(
         .unwrap()
 }
 
-/// Generate access token error with BAD_REQUEST status code
-pub fn access_token_error(error: &str) -> Response {
-    info!("Access token error: {:?}", error);
-    let body = AccessTokenError {
-        error: error.to_string(),
-    };
-    (StatusCode::BAD_REQUEST, Json(body)).into_response()
+/// Generate client redirect error with provided error
+fn client_error<S: Into<String> + std::fmt::Display>(
+    error: S,
+    error_description: S,
+    query: Rc<AuthorizationQuery>,
+) -> Response {
+    let redirect_uri = &query.redirect_uri;
+    let state = query
+        .state
+        .clone()
+        .map_or("".to_string(), |s| format!("&state={}", s));
+    let location =
+        format!("{redirect_uri}?error={error}&error_description={error_description}{state}");
+
+    info!("{error_description}");
+
+    Response::builder()
+        .status(StatusCode::FOUND)
+        .header("Location", location)
+        .body(Body::empty())
+        .unwrap()
 }
 
 /// Implement OAuth2 Token endpoint
@@ -174,6 +229,13 @@ pub async fn access_token(
     // Handle authorization code flow
     let code = token_request.code;
 
+    if code.starts_with("invalid") 
+        || code.starts_with("unauthorized") 
+        || code.eq_ignore_ascii_case("unsupported_grant_type")
+    {
+        return access_token_error(&code);
+    };
+
     if !state.access_tokens.contains_key(&code) {
         info!("Authorization code not found: {}", code);
         return access_token_error("invalid_grant");
@@ -182,16 +244,26 @@ pub async fn access_token(
     let access_token = state.access_tokens.get(&code).unwrap();
     let refresh_token = state.refresh_tokens.get(&code).unwrap();
 
-    let body = AccessTokenResponse {
+    let json_body = AccessTokenResponse {
         access_token: access_token.clone(),
         token_type: "bearer".to_string(),
         expires_in: 3600,
         refresh_token: refresh_token.clone(),
     };
-    return (StatusCode::OK, Json(body)).into_response();
+
+    return (Json(json_body)).into_response();
 }
 
-pub async fn userinfo(State(state): State<AppState>, headers: HeaderMap) -> Response {
+/// Generate access token error with BAD_REQUEST status code
+pub fn access_token_error(error: &str) -> Response {
+    info!("Access token error: {:?}", error);
+    let body = AccessTokenError {
+        error: error.to_string(),
+    };
+    (StatusCode::BAD_REQUEST, Json(body)).into_response()
+}
+
+pub async fn userinfo(State(state): State<AppState>, headers: HeaderMap) -> impl IntoResponse {
     let header_prefix = format!("{} ", &state.authorization_header_prefix).to_string();
 
     // Extract Bearer token from Authorization header

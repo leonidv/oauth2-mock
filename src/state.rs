@@ -1,15 +1,14 @@
+
 use std::{collections::HashMap, sync::Arc};
 
 use axum_extra::extract::cookie::Key;
 use uuid::Uuid;
 
-use crate::{
-    configuration::{ApplicationConfiguration, RegisteredUsers, User},
-    templates::Templates,
-};
+use crate::{configuration::{ApplicationConfiguration, RegisteredUsers, User}, templates::Templates};
+
 
 #[derive(Debug, Clone)]
-pub(crate) struct AppState {
+pub struct AppState {
     /// signed cookie key
     pub(crate) key: Key,
 
@@ -65,7 +64,7 @@ fn link_access_token_with_user(
 }
 
 impl AppState {
-    pub(crate) fn new(app_config: &ApplicationConfiguration, templates: Templates) -> Self {
+    pub fn new(app_config: &ApplicationConfiguration, templates: Templates) -> Self {
         let users = RegisteredUsers::new(&app_config.users);
         let authorization_codes = make_uuids_per_key(&users.logins());
 
@@ -94,3 +93,4 @@ impl AppState {
         }
     }
 }
+

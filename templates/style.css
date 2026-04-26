@@ -1,45 +1,78 @@
 body {
     margin: 0;
     font-family: 'Roboto', Arial, Helvetica, sans-serif;
-    font-size: 20t;
     background-color: #f0f0f0;
+    font-size: 12pt;
+    color: #3c4043;
     --warn-color: #c62e35;
+    --body-separator-color: #dadce0;
+    --link-color: #007bff;
 }
 
 header {
-  display: flex;
-  justify-content: space-between;
-  align-items: baseline;
-  border-bottom-color: black;
-  border-bottom-style: solid;
-  border-bottom-width: 1px;
-  margin-bottom: 16px;
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    border-bottom: 1px solid var(--body-separator-color);
+    margin-bottom: 3rem;
 }
 
 footer {
-    display: block;
-    padding: 15px;
-    margin-bottom: 16px;
-    color: #fff;
-    border-radius: 4px;
-    position: relative;    
-    background-color: #7495b8; 
+    margin-top: 3rem;
+    padding: 0.5rem;
+    font-size: 0.95em;
     text-align: center;
-    margin-top: 16px;
+    border-top: 1px solid var(--body-separator-color);
+}
+
+footer a {
+    color: #4a4d50;
+    text-decoration: none;
+    font-weight: 500;
+}
+
+footer a:hover {
+    text-decoration: underline;
+}
+
+p {
+    margin: 0.5rem 0;
 }
 
 h1 {
     margin: 0;
+    color: #4a4d50;
 }
 
+h2 {
+    margin-top: 0;
+    color: #1967d2;
+}
 
+h3 {
+    margin-bottom: 0px;
+}
+
+section {
+    margin-top: 0;
+    padding-left: 0.5rem;
+}
+
+a {
+    color: var(--link-color);
+    text-decoration: none;
+}
+
+a:hover {
+    text-decoration: underline;
+}
 
 .warning {
-    color :var(--warn-color);
+    color: var(--warn-color);
 }
 
 .container {
-    width: 960px;
+    width: 1100px;
     max-width: 100%;
     padding: 20px;
     padding-bottom: 1px;
@@ -52,18 +85,6 @@ code {
     background: #e0e0e0;
     padding: 2px 4px;
     border-radius: 3px;
-}
-
-.user-list {
-    margin: 0px 0;
-}
-
-.user-item {
-    background: #f8f9fa;
-    padding: 15px;
-    margin: 15px 0;
-    border-radius: 5px;
-    border-left: 4px solid #7495b8;
 }
 
 .user-item h4 {
@@ -113,27 +134,111 @@ code {
 }
 
 .callout.warning {
-    background-color: #c62e35; 
-    color: #ffffff; 
-    border-left: 5px solid #b2242c; 
+    background-color: #c62e35;
+    color: #ffffff;
+    border-left: 5px solid #b2242c;
 }
 
 .callout.info {
-    background-color: #7495b8; 
+    background-color: #7495b8;
     text-align: center;
 }
 
-.callout.warning::before { /* Создаем псевдоэлемент с символом */
-    content: "\26A0"; /* Код символа предупреждения U+26A0 */
+.callout.warning::before {
+    content: "\26A0";
     font-size: 1.2em;
     margin-right: 10px;
     vertical-align: middle;
 }
 
 .error {
-      color: var(--warn-color);
-      background: #ffebee;
-      padding: 10px;
-      border-radius: 5px;
-      margin: 10px 0;
+    color: var(--warn-color);
+    background: #ffebee;
+    padding: 10px;
+    border-radius: 5px;
+    margin: 10px 0;
+}
+
+.monospace {
+    font-family: 'Courier New', Courier, monospace;
+    font-size: 0.9em;
+}
+
+/* Common styles for panels */
+.oauth2-container {
+    display: flex;
+    gap: 2rem;
+    margin-top: 1rem;
+}
+
+.oauth2-container-panel {
+    flex: 1;
+    min-width: 0;
+    background-color: #f8f9fa;
+    padding: 1rem;
+    border-radius: 0.5rem;
+    border: 1px solid #dee2e6;
+}
+
+.users-panel {
+    min-width: 60%;
+}
+
+/* User list styles */
+.users-list {
+    margin-bottom: 1rem;
+    list-style: none;
+    padding: 0;
+}
+
+.users-list li {
+    margin: 0.75rem 0;
+}
+
+.users-list a {
+    font-size: larger;
+}
+
+.user-description {
+    color: #666;
+}
+
+/* Error links styles */
+.error-links {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+.error-links li {
+    margin: 0.5rem 0;
+}
+
+.input-state {
+    margin-top: 0.75rem;
+}
+
+/* Hint styles */
+.hint {
+    cursor: default;
+    color: var(--link-color);
+    font-size: smaller;
+}
+
+#error-hint {
+    position: absolute;
+    background: #333;
+    color: white;
+    padding: 10px;
+    border-radius: 4px;
+    font-size: 14px;
+    max-width: 300px;
+    z-index: 1000;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 500ms ease-in-out;
+}
+
+#error-hint.show {
+    opacity: 1;
 }

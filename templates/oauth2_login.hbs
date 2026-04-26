@@ -1,24 +1,303 @@
-<style>
 {{#*inline "style"}}
-    .monospace {
-        font-family: 'Courier New', Courier, monospace;
-        font-size: 0.9em;
-    }
+.tabs {
+    margin-bottom: 0;
+    border-bottom: 1px solid #ddd;
+}
+
+.tab-button {
+    background-color: #f8f9fa;
+    border: 1px solid #ddd;
+    border-bottom: none;
+    padding: 10px 15px;
+    cursor: pointer;
+    margin-right: 5px;
+    border-radius: 5px 5px 0 0;
+}
+
+.tab-button.active {
+    background-color: #fff;
+    border-bottom: 1px solid #fff;
+    margin-bottom: -1px;
+    font-weight: bold;
+}
+
+.tab-content {
+    display: none;
+    padding: 15px;
+    border: 1px solid #ddd;
+    border-top: none;
+    border-radius: 0 5px 5px 5px;
+    background-color: #fff;
+}
+
+.tab-content > h3:first-child {
+    margin-top: 0;
+}
+
+.form-group {
+    margin-bottom: 15px;
+}
+
+.form-group label {
+    display: block;
+    margin-bottom: 5px;
+    font-weight: bold;
+}
+
+.combo-box {
+    width: 100%;
+    padding: 8px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+}
 {{/inline}}
-</style>
+
 {{#*inline "script"}}
+// Error descriptions based on RFC6749
+const errorDescriptions = {
+    'invalid_request': 'The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed.',
+    'invalid_client': 'Client authentication failed (e.g., unknown client, no client authentication included, or unsupported authentication method).',
+    'invalid_grant': 'The provided authorization grant (e.g., authorization code, resource owner credentials) or refresh token is invalid, expired, revoked, does not match the redirection URI used in the authorization request, or was issued to another client.',
+    'unauthorized_client': 'The client is not authorized to request an authorization code using this method.',
+    'unsupported_grant_type': 'The authorization grant type is not supported by the authorization server.',
+    'invalid_scope': 'The requested scope is invalid, unknown, or malformed.',
+    'server_error': 'The authorization server encountered an unexpected condition that prevented it from fulfilling the request.',
+    'temporarily_unavailable': 'The authorization server is currently unable to handle the request due to a temporary overloading or maintenance of the server.'
+};
+
+function showErrorDescription() {
+    const errorSelect = document.getElementById('error-select');
+    const errorDescription = document.getElementById('error-description');
+    const selectedError = errorSelect.value;
+    
+    if (selectedError && errorDescriptions[selectedError]) {
+        errorDescription.textContent = errorDescriptions[selectedError];
+        errorDescription.style.display = 'block';
+    } else {
+        errorDescription.style.display = 'none';
+    }
+}
+
+// Parse auth_params and create hidden form fields
+function parseAuthParams(authParams) {
+    if (!authParams) return [];
+    
+    // Split the params string by & and parse each key-value pair
+    return authParams.split('&').map(param => {
+        const [key, value] = param.split('=');
+        return { key: decodeURIComponent(key), value: decodeURIComponent(value || '') };
+    }).filter(param => param.key); // Filter out any empty keys
+}
+
+// Generate hidden input fields from parsed params
+function createHiddenFields(form, params) {
+    params.forEach(param => {
+        const input = document.createElement('input');
+        input.type = 'hidden';
+        input.name = param.key;
+        input.value = param.value;
+        form.appendChild(input);
+    });
+}
+
+// Show description for default selected error on page load
+window.addEventListener('load', function() {
+    showErrorDescription();
+    
+    // Add auth_params as hidden fields to the access token error form
+    const authParams = '{{auth_params}}';
+    const parsedParams = parseAuthParams(authParams);
+    const form = document.getElementById('access-token-error');
+    if (form) {
+        createHiddenFields(form, parsedParams);
+    }
+});
+
+function openTab(evt, tabName) {
+    // Hide all tab content
+    const tabContents = document.getElementsByClassName("tab-content");
+    for (let i = 0; i < tabContents.length; i++) {
+        tabContents[i].style.display = "none";
+    }
+
+    // Remove 'active' class from all tab buttons
+    const tabButtons = document.getElementsByClassName("tab-button");
+    for (let i = 0; i < tabButtons.length; i++) {
+        tabButtons[i].className = tabButtons[i].className.replace(" active", "");
+    }
+
+    // Show the current tab and add 'active' class to the button
+    document.getElementById(tabName).style.display = "block";
+    evt.currentTarget.className += " active";
+}
+
+function changeState() {
+    const newStateValue = document.getElementById('state').value;
+    const url = new URL(window.location.href);
+    const currentState = url.searchParams.get('state');
+
+    if (currentState) {
+        url.searchParams.set('state', newStateValue);
+        url.searchParams.set('previous_state', currentState);
+    } else {
+        url.searchParams.set('state', newStateValue);
+    }
+
+    window.location.href = url.toString();
+}
+
+let currentHint = null;
+
+function showHint(error) {
+    if (currentHint) return; // Prevent multiple hints
+
+    let message = '';
+    switch (error) {
+        case 'unauthorized_client':
+            message = 'The client is not authorized to request an authorization code using this method.';
+            break;
+        case 'access_denied':
+            message = 'The resource owner or authorization server denied the request.';
+            break;
+        case 'unsupported_response_type':
+            message = 'The authorization server does not support obtaining an authorization code using this method.';
+            break;
+        case 'invalid_scope':
+            message = 'The requested scope is invalid, unknown, or malformed.';
+            break;
+        case 'server_error':
+            message = 'The authorization server encountered an unexpected condition that prevented it from fulfilling the request.';
+            break;
+        case 'temporarily_unavailable':
+            message = 'The authorization server is currently unable to handle the request due to a temporary overloading or maintenance of the server.';
+            break;
+        default:
+            message = 'Unknown error.';
+    }
+
+    // Create and show hint element
+    const hint = document.createElement('div');
+    hint.id = 'error-hint';
+    hint.textContent = message;
+
+    // Position the hint near the cursor
+    document.addEventListener('mousemove', updateHintPosition);
+
+    document.body.appendChild(hint);
+
+    // Trigger reflow to ensure transition works
+    void hint.offsetWidth;
+    hint.classList.add('show');
+
+    currentHint = hint;
+}
+
+function updateHintPosition(e) {
+    if (currentHint) {
+        currentHint.style.left = (e.pageX + 10) + 'px';
+        currentHint.style.top = (e.pageY + 10) + 'px';
+    }
+}
+
+function hideHint() {
+    if (currentHint) {
+        currentHint.classList.remove('show');
+        // Wait for transition to complete before removing
+        if (currentHint) {
+            document.body.removeChild(currentHint);
+            currentHint = null;
+        }
+
+        document.removeEventListener('mousemove', updateHintPosition);
+    }
+}
 {{/inline}}
 
 {{#*inline "page"}}
-         <h2>Users</h2>   
-         <div class="user-list">
-            {{#each users}}
-            <div class="user-item">
-                <h3><a href="/authorize?login={{login}}&{{../auth_params}}">{{login}}</a></a></h4>
-                    <p>{{description}}</p>
-            </div>
-            {{/each}}
+<div class="oauth2-container">
+    <div class="oauth2-container-panel users-panel">
+        <h2>Login as User</h2>
+        <section>
+            <ul class="users-list">
+                {{#each users}}
+                <li>
+                    <a href="/authorize?login={{login}}&{{../auth_params}}">{{login}} - {{description}}</a>
+                </li>
+                {{/each}}
+            </ul>
+        </section>
+        <div>After an authorization you will be redirected to: <span class="monospace">{{redirect_uri}}</span></div>
+    </div>
+    <div class="oauth2-container-panel">
+        <h2>Non-positive Cases</h2>
+        
+        <!-- Tabs -->
+        <div class="tabs">
+            <button class="tab-button active" onclick="openTab(event, 'access-code')">Access code</button>
+            <button class="tab-button" onclick="openTab(event, 'access-token')">Access token</button>
         </div>
-        <div>After an authorization you will be redirected to: <span class="monospace">{{redirect_uri}}</span>  </div>
+
+        <!-- Tab Content -->
+        <div id="access-code" class="tab-content" style="display: block;">
+            <h3>Errors</h3>
+            <p>Read <a href="https://datatracker.ietf.org/doc/html/rfc6749#section-4.1.2.1">RFC-6749 4.1.2.1</a> for more information</p>
+            <section>
+                <ul class="error-links">
+                    <li><span class="hint" onmouseover="showHint('unauthorized_client')" onmouseout="hideHint()">ℹ️</span>
+                        <a href="/authorize?error_type=access_code&error=unauthorized_client&{{../auth_params}}">unauthorized_client</a>
+                    </li>
+                    <li><span class="hint" onmouseover="showHint('access_denied')" onmouseout="hideHint()"> ℹ️</span> <a
+                            href="/authorize?error_type=access_code&error=access_denied&{{../auth_params}}">access_denied</a></li>
+                    <li><span class="hint" onmouseover="showHint('unsupported_response_type')"
+                            onmouseout="hideHint()">ℹ️</span> <a
+                            href="/authorize?error_type=access_code&error=unsupported_response_type&{{../auth_params}}">unsupported_response_type</a></li>
+                    <li><span class="hint" onmouseover="showHint('invalid_scope')" onmouseout="hideHint()">ℹ️</span> <a
+                            href="/authorize?error=error_type=access_code&invalid_scope&{{../auth_params}}">invalid_scope</a></li>
+                    <li><span class="hint" onmouseover="showHint('server_error')" onmouseout="hideHint()">ℹ️</span> <a
+                            href="/authorize?error_type=access_code&error=server_error&{{../auth_params}}">server_error</a></li>
+                    <li><span class="hint" onmouseover="showHint('temporarily_unavailable')"
+                            onmouseout="hideHint()">ℹ️</span> <a
+                            href="/authorize?error=temporarily_unavailable&{{../auth_params}}">temporarily_unavailable</a></li>
+                </ul>                
+            </section>
+            <h3>State</h3>
+            <section>
+                <input id="state" class="input-state" type="text" value="{{state}}"> <button onclick="changeState()">Change</button>
+                {{#if state_changed }}<p>Previous state: <span class="monospace" style="word-wrap: anywhere;">{{
+                        previous_state }}</span> </p> {{/if}}
+            </section>
+        </div>
+
+        <div id="access-token" class="tab-content" style="display: none;">
+            <p>Read <a href="https://datatracker.ietf.org/doc/html/rfc6749#section-5.2">RFC-6749 5.2</a> for more information</p>
+            <form id="access-token-error" method="GET" action="/authorize">
+                <input type="hidden" name="error_type" value="access_token"/>
+                <div class="form-group">
+                    <label for="user-select">User:</label>
+                    <select id="user-select" class="combo-box" name="login">
+                        {{#each users}}
+                        <option value="{{login}}">{{login}}</option>
+                        {{/each}}
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="error-select">Error:</label>
+                    <select id="error-select" class="combo-box" name="error" onchange="showErrorDescription()">
+                        <option value="invalid_request" selected>invalid_request</option>
+                        <option value="invalid_client">invalid_client</option>
+                        <option value="invalid_grant">invalid_grant</option>
+                        <option value="unauthorized_client">unauthorized_client</option>
+                        <option value="unsupported_grant_type">unsupported_grant_type</option>
+                        <option value="invalid_scope">invalid_scope</option>
+                    </select>
+                    <div id="error-description" class="error-description" style="display: none; margin-top: 10px; padding: 10px; background-color: #f8f9fa; border: 1px solid #ddd; border-radius: 4px;"></div>
+                </div>
+                <div class="form-group">
+                    <button type="submit">Send</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
 {{/inline}}
 {{> base}}
