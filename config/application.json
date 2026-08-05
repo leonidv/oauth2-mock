@@ -8,7 +8,7 @@
   },
   "access_restriction": {
     "enabled": false,
-    "code":"123",
+    "code":"",
     "sign_key":""
   },
   "users": [

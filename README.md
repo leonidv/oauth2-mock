@@ -29,11 +29,39 @@ And open welcome page in your browser: http://localhost:3000
 
 
 ## Configuration
-Copy default (embedded) [configuration](config/application.json).
-Run application with new config file:
+The application starts with the embedded [default configuration](config/application.json).
+You can add a partial JSON configuration layer:
+
+```json
+{
+  "server": {
+    "port": 8080
+  }
+}
 ```
+
+```sh
 oauth2-mock --config your-config.json
-````
+```
+
+Configuration sources are applied in this order, from lowest to highest priority:
+
+1. Embedded `config/application.json`
+2. Optional JSON file selected by `--config`
+3. Environment variables prefixed with `OAUTH2_MOCK_`
+4. Explicit CLI overrides such as `--host` and `--port`
+
+Use a double underscore to separate nested environment keys:
+
+```sh
+OAUTH2_MOCK_SERVER__HOST=127.0.0.1 \
+OAUTH2_MOCK_SERVER__PORT=8080 \
+OAUTH2_MOCK_ACCESS_RESTRICTION__ENABLED=true \
+OAUTH2_MOCK_ACCESS_RESTRICTION__CODE=secret \
+oauth2-mock
+```
+
+Objects are merged recursively. Arrays in JSON sources, including `users`, are replaced as a whole by a higher-priority JSON file. Complex `users` values are not supported through environment variables; use `--config` for them. Missing fields inherit the value from the previous layer; an explicit JSON `null` does not trigger fallback and is invalid for required fields.
 
 Each user is described by fields:
 * **login** - internal login to authenticate. It is like login/password in the Google.
