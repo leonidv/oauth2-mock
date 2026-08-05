@@ -59,19 +59,29 @@ pub async fn login(
     original_uri: OriginalUri,
     jar: SignedCookieJar<AppState>,
     Query(params): Query<AuthorizationQuery>,
-) -> Result<Html<String>, StatusCode> {
-    let templates = &state.templates;
-
+) -> Response {
     let require_access_code = state.access_restricted && !jar.is_authorized();
 
-    let html = if require_access_code {
+    if require_access_code {
         let show_error = jar.get_authorization_state() == AuthorizationState::CodeIsBad;
-        templates.render_authorize_form(original_uri, show_error)
-    } else {
-        templates.render_oauth2_login(state.users.as_ref(), &params)
-    };
+        return Html(
+            state
+                .templates
+                .render_authorize_form(original_uri, show_error),
+        )
+        .into_response();
+    }
 
-    Ok(Html(html))
+    if params.login.is_some() || params.error_type.is_some() {
+        return authorize(State(state), Query(params)).await;
+    }
+
+    Html(state.templates.render_oauth2_login(
+        state.users.as_ref(),
+        &params,
+        &state.authorization_path,
+    ))
+    .into_response()
 }
 
 /// Implement OAuth2 Authorization Code enpoint
@@ -229,8 +239,8 @@ pub async fn access_token(
     // Handle authorization code flow
     let code = token_request.code;
 
-    if code.starts_with("invalid") 
-        || code.starts_with("unauthorized") 
+    if code.starts_with("invalid")
+        || code.starts_with("unauthorized")
         || code.eq_ignore_ascii_case("unsupported_grant_type")
     {
         return access_token_error(&code);

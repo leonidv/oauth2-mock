@@ -1,0 +1,52 @@
+{
+  "server": {
+    "host": "0.0.0.0",
+    "port": 3000
+  },
+  "oauth2": {
+    "name": "Yandex ID",
+    "authorization_header_prefix": "OAuth",
+    "authorization_path": "/authorize",
+    "token_path": "/token",
+    "userinfo_path": "/info"
+  },
+  "access_restriction": {
+    "enabled": false,
+    "code": "",
+    "sign_key": ""
+  },
+  "users": [
+    {
+      "login": "admin",
+      "description": "Administrator of system",
+      "userInfo": {
+        "id": "1",
+        "login": "admin",
+        "display_name": "Admin MJ",
+        "real_name": "Michael Johnson",
+        "first_name": "Michael",
+        "last_name": "Johnson",
+        "default_email": "admin@company.com",
+        "emails": [
+          "admin@company.com"
+        ]
+      }
+    },
+    {
+      "login": "manager",
+      "description": "Manager works with orders",
+      "userInfo": {
+        "id": "2",
+        "login": "manager",
+        "display_name": "Manager SD",
+        "real_name": "Sarah Davis",
+        "first_name": "Sarah",
+        "last_name": "Davis",
+        "default_email": "manager@company.com",
+        "emails": [
+          "manager@company.com"
+        ]
+      }
+    }
+  ]
+}

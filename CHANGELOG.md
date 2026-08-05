@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Added configurable OAuth2 authorization, token, and user info endpoint paths.
+- Added a mocked provider display name to the OAuth2 configuration and welcome page.
 - Added layered configuration with the following precedence: embedded JSON, optional `--config` JSON, `OAUTH2_MOCK_*` environment variables, and CLI overrides.
 - Added `--host` and `--port` configuration overrides.
 - External JSON files can now be partial; nested objects are merged and arrays are replaced as a whole.

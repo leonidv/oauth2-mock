@@ -1,0 +1,44 @@
+{
+  "server": {
+    "host": "0.0.0.0",
+    "port": 3000
+  },
+  "oauth2": {
+    "name": "Google",
+    "authorization_header_prefix": "Bearer",
+    "authorization_path": "/o/oauth2/v2/auth",
+    "token_path": "/token",
+    "userinfo_path": "/v1/userinfo"
+  },
+  "access_restriction": {
+    "enabled": false,
+    "code": "",
+    "sign_key": ""
+  },
+  "users": [
+    {
+      "login": "admin",
+      "description": "Administrator of system",
+      "userInfo": {
+        "sub": "1",
+        "name": "Michael Johnson",
+        "given_name": "Michael",
+        "family_name": "Johnson",
+        "email": "admin@company.com",
+        "email_verified": true
+      }
+    },
+    {
+      "login": "manager",
+      "description": "Manager works with orders",
+      "userInfo": {
+        "sub": "2",
+        "name": "Sarah Davis",
+        "given_name": "Sarah",
+        "family_name": "Davis",
+        "email": "manager@company.com",
+        "email_verified": true
+      }
+    }
+  ]
+}

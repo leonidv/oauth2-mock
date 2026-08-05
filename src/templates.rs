@@ -1,4 +1,3 @@
-
 use axum::extract::OriginalUri;
 use handlebars::{DirectorySourceOptions, Handlebars};
 use rust_embed::Embed;
@@ -6,7 +5,9 @@ use serde::Serialize;
 use tracing::info;
 
 use crate::{
-    configuration::{RegisteredUsers, User}, oauth2::AuthorizationQuery, router::CHECK_ACCESS_CODE_PATH
+    configuration::{RegisteredUsers, User},
+    oauth2::AuthorizationQuery,
+    router::CHECK_ACCESS_CODE_PATH,
 };
 
 #[derive(Embed)]
@@ -24,6 +25,11 @@ pub struct Templates {
 #[derive(Serialize)]
 struct HomeVariables {
     users: Vec<User>,
+    provider_name: String,
+    authorization_path: String,
+    token_path: String,
+    userinfo_path: String,
+    authorization_header_prefix: String,
 }
 
 #[derive(Serialize)]
@@ -34,6 +40,7 @@ struct LoginVariables {
     state: String,
     state_changed: bool,
     previous_state: String,
+    authorization_path: String,
 }
 
 #[derive(Serialize)]
@@ -49,14 +56,29 @@ impl Templates {
         Self { handlebars }
     }
 
-    pub(crate) fn render_home(&self, users: &RegisteredUsers) -> String {
+    pub(crate) fn render_home(
+        &self,
+        users: &RegisteredUsers,
+        provider_name: &str,
+        authorization_path: &str,
+        token_path: &str,
+        userinfo_path: &str,
+        authorization_header_prefix: &str,
+    ) -> String {
         let mut users = Vec::from_iter(users.all().iter().map(|v| v.clone()));
         users.sort_by(|a, b| a.login.cmp(&b.login));
-        let data = HomeVariables { users };
+        let data = HomeVariables {
+            users,
+            provider_name: provider_name.to_string(),
+            authorization_path: authorization_path.to_string(),
+            token_path: token_path.to_string(),
+            userinfo_path: userinfo_path.to_string(),
+            authorization_header_prefix: authorization_header_prefix.to_string(),
+        };
         self.handlebars.render("home", &data).unwrap()
     }
 
-    pub(crate) fn render_authorize_form(&self, uri : OriginalUri, show_error : bool) -> String {
+    pub(crate) fn render_authorize_form(&self, uri: OriginalUri, show_error: bool) -> String {
         let return_to = uri.0.to_string();
         let data = AuthorizeFormVariables {
             action_url: CHECK_ACCESS_CODE_PATH.to_string(),
@@ -70,6 +92,7 @@ impl Templates {
         &self,
         users: &RegisteredUsers,
         auth_request: &AuthorizationQuery,
+        authorization_path: &str,
     ) -> String {
         let mut users = Vec::from_iter(users.all().iter().map(|v| v.clone()));
         users.sort_by(|a, b| a.login.cmp(&b.login));
@@ -98,6 +121,7 @@ impl Templates {
             state_changed: previous_state.is_some(),
             state: state.unwrap_or("".to_string()),
             previous_state: previous_state.unwrap_or("".to_string()),
+            authorization_path: authorization_path.to_string(),
         };
         self.handlebars.render("oauth2_login", &data).unwrap()
     }
@@ -113,11 +137,11 @@ fn load_templates() -> Result<Handlebars<'static>, Box<dyn std::error::Error>> {
     if cfg!(feature = "devmode") {
         info!("devmode: activate templates hot reload");
         hbs.set_dev_mode(true);
-        hbs.register_templates_directory("templates/", DirectorySourceOptions::default()).unwrap();
+        hbs.register_templates_directory("templates/", DirectorySourceOptions::default())
+            .unwrap();
     } else {
         hbs.register_embed_templates_with_extension::<TemplatesFiles>(".hbs")?;
     }
 
     Ok(hbs)
 }
-

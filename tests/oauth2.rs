@@ -1,11 +1,94 @@
 mod commons;
 
-use std::collections::HashMap;
 use axum::http::StatusCode;
 use behave::prelude::*;
+use std::collections::HashMap;
 use yare::parameterized;
 
-use commons::setup_server;
+use commons::{setup_server, setup_server_with_config};
+use oauth2_mock::configuration::ApplicationConfiguration;
+
+#[tokio::test]
+async fn custom_provider_paths_are_used_for_the_complete_flow() {
+    let mut config = ApplicationConfiguration::default();
+    config.oauth2.name = "Blitz Identity Provider".to_string();
+    config.oauth2.authorization_path = "/blitz/oauth/ae".to_string();
+    config.oauth2.token_path = "/blitz/oauth/te".to_string();
+    config.oauth2.userinfo_path = "/blitz/oauth/me".to_string();
+    config.oauth2.authorization_header_prefix = "OAuth".to_string();
+    let server = setup_server_with_config(config);
+
+    let home = server.get("/").await;
+    home.assert_status_ok();
+    home.assert_text_contains("Mocked provider: Blitz Identity Provider");
+    home.assert_text_contains("GET /blitz/oauth/ae");
+    home.assert_text_contains("POST /blitz/oauth/te");
+    home.assert_text_contains("GET /blitz/oauth/me");
+    home.assert_text_contains("Headers: Authorization: OAuth &lt;access_token&gt;");
+
+    let authorization_url =
+        "/blitz/oauth/ae?response_type=code&client_id=123&redirect_uri=http://localhost:8080";
+    let login = server.get(authorization_url).await;
+    login.assert_status_ok();
+    login.assert_text_contains("/blitz/oauth/ae?login=admin");
+    assert!(!login.text().contains("Blitz Identity Provider"));
+
+    let authorization = server
+        .get("/blitz/oauth/ae?login=admin&response_type=code&client_id=123&redirect_uri=http://localhost:8080")
+        .await;
+    authorization.assert_status(StatusCode::FOUND);
+    let location = authorization
+        .header("Location")
+        .to_str()
+        .expect("Location must be ASCII")
+        .to_string();
+    let redirect = url::Url::parse(&location).expect("valid redirect URL");
+    let code = redirect
+        .query_pairs()
+        .find(|(key, _)| key == "code")
+        .map(|(_, value)| value.into_owned())
+        .expect("authorization code");
+
+    let response = server
+        .post("/blitz/oauth/te")
+        .form(&[
+            ("grant_type", "authorization_code"),
+            ("code", code.as_str()),
+        ])
+        .await;
+    response.assert_status_ok();
+    let json: serde_json::Value = response.json();
+    let access_token = json["access_token"].as_str().expect("access token");
+
+    server
+        .get("/blitz/oauth/me")
+        .add_header("Authorization", format!("OAuth {access_token}"))
+        .await
+        .assert_status_ok();
+
+    server
+        .get("/login?response_type=code&client_id=123&redirect_uri=http://localhost:8080")
+        .await
+        .assert_status_not_found();
+    server.post("/token").await.assert_status_not_found();
+    server.get("/userinfo").await.assert_status_not_found();
+}
+
+#[tokio::test]
+async fn configured_authorization_path_can_use_legacy_authorize_path() {
+    let mut config = ApplicationConfiguration::default();
+    config.oauth2.authorization_path = "/authorize".to_string();
+    let server = setup_server_with_config(config);
+
+    server
+        .get("/authorize?response_type=code&client_id=123&redirect_uri=http://localhost:8080")
+        .await
+        .assert_status_ok();
+    server
+        .get("/authorize?login=admin&response_type=code&client_id=123&redirect_uri=http://localhost:8080")
+        .await
+        .assert_status(StatusCode::FOUND);
+}
 
 #[tokio::test]
 async fn code_token_and_info() -> Result<(), Box<dyn std::error::Error>> {
@@ -134,7 +217,6 @@ async fn access_code_explicit_errors(error: &str) -> Result<(), Box<dyn std::err
 #[test_macro(tokio::test)]
 async fn access_token_explicit_errors(error: &str) -> Result<(), Box<dyn std::error::Error>> {
     //let error = "invalid_request";
-    
 
     let server = setup_server();
     let url = format!(
@@ -154,7 +236,6 @@ async fn access_token_explicit_errors(error: &str) -> Result<(), Box<dyn std::er
     url_expect.to_have_host("localhost")?;
     url_expect.to_have_query_param("code")?;
     url_expect.to_have_query_param_value("state", "456")?;
-
 
     let access_code = url
         .query_pairs()
@@ -183,7 +264,6 @@ async fn access_token_explicit_errors(error: &str) -> Result<(), Box<dyn std::er
     let access_token_json: serde_json::Value = response.json();
     let json_expect = expect!(access_token_json);
     json_expect.to_have_field_value("error", &error.into())?;
-
 
     Ok(())
 }

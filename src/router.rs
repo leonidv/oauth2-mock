@@ -19,26 +19,34 @@ use crate::{authorization, oauth2, state::AppState};
 use crate::authorization::*;
 
 pub(crate) const CHECK_ACCESS_CODE_PATH: &str = "/check_code";
-pub(crate) const OAUTH2_LOGIN_PATH: &str = "/login";
 pub(crate) const OAUTH2_AUTHORIZATION_PATH: &str = "/authorize";
-pub(crate) const OAUTH2_TOKEN_PATH: &str = "/token";
-pub(crate) const OAUTH2_USERINFO_PATH: &str = "/userinfo";
 
 pub fn setup_router(state: AppState) -> Router {
-    Router::new()
+    let authorization_path = state.authorization_path.clone();
+    let token_path = state.token_path.clone();
+    let userinfo_path = state.userinfo_path.clone();
+
+    let mut router = Router::new()
         .route("/style.css", get(css_styles))
         .route("/", get(home))
         .route("/test", get(login))
-        .route(OAUTH2_LOGIN_PATH, get(oauth2::login))
+        .route(&authorization_path, get(oauth2::login))
         .route(CHECK_ACCESS_CODE_PATH, post(authorization::check_access))
-        .route(
+        .route(&token_path, post(oauth2::access_token))
+        .route(&userinfo_path, get(oauth2::userinfo));
+
+    // Keep the original direct authorization action for compatibility unless the
+    // configured public authorization endpoint uses the same path.
+    if authorization_path != OAUTH2_AUTHORIZATION_PATH {
+        router = router.route(
             OAUTH2_AUTHORIZATION_PATH,
             get(oauth2::authorize).layer(from_extractor_with_state::<CheckAccessCode, AppState>(
                 state.clone(),
             )),
-        )
-        .route(OAUTH2_TOKEN_PATH, post(oauth2::access_token))
-        .route(OAUTH2_USERINFO_PATH, get(oauth2::userinfo))
+        );
+    }
+
+    router
         .layer(TimeoutLayer::with_status_code(
             StatusCode::REQUEST_TIMEOUT,
             Duration::from_millis(100),
@@ -49,7 +57,14 @@ pub fn setup_router(state: AppState) -> Router {
 async fn home(State(state): State<AppState>) -> Result<Html<String>, StatusCode> {
     let templates = &state.templates;
 
-    let html = templates.render_home(&state.users);
+    let html = templates.render_home(
+        &state.users,
+        &state.oauth2_name,
+        &state.authorization_path,
+        &state.token_path,
+        &state.userinfo_path,
+        &state.authorization_header_prefix,
+    );
 
     Ok(Html(html))
 }
@@ -72,4 +87,3 @@ async fn css_styles(State(state): State<AppState>) -> Response {
     )
         .into_response();
 }
-

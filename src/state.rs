@@ -1,11 +1,12 @@
-
 use std::{collections::HashMap, sync::Arc};
 
 use axum_extra::extract::cookie::Key;
 use uuid::Uuid;
 
-use crate::{configuration::{ApplicationConfiguration, RegisteredUsers, User}, templates::Templates};
-
+use crate::{
+    configuration::{ApplicationConfiguration, RegisteredUsers, User},
+    templates::Templates,
+};
 
 #[derive(Debug, Clone)]
 pub struct AppState {
@@ -34,6 +35,14 @@ pub struct AppState {
     pub(crate) users: Arc<RegisteredUsers>,
 
     pub(crate) authorization_header_prefix: String,
+
+    pub(crate) oauth2_name: String,
+
+    pub(crate) authorization_path: String,
+
+    pub(crate) token_path: String,
+
+    pub(crate) userinfo_path: String,
 
     pub(crate) templates: Arc<Templates>,
 }
@@ -89,8 +98,11 @@ impl AppState {
             users_info: Arc::new(users_info),
             users: Arc::new(users),
             authorization_header_prefix: app_config.oauth2.authorization_header_prefix.clone(),
+            oauth2_name: app_config.oauth2.name.clone(),
+            authorization_path: app_config.oauth2.authorization_path.clone(),
+            token_path: app_config.oauth2.token_path.clone(),
+            userinfo_path: app_config.oauth2.userinfo_path.clone(),
             templates: Arc::new(templates),
         }
     }
 }
-

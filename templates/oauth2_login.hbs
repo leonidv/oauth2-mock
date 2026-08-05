@@ -221,7 +221,7 @@ function hideHint() {
             <ul class="users-list">
                 {{#each users}}
                 <li>
-                    <a href="/authorize?login={{login}}&{{../auth_params}}">{{login}} - {{description}}</a>
+                    <a href="{{../authorization_path}}?login={{login}}&{{../auth_params}}">{{login}} - {{description}}</a>
                 </li>
                 {{/each}}
             </ul>
@@ -244,20 +244,20 @@ function hideHint() {
             <section>
                 <ul class="error-links">
                     <li><span class="hint" onmouseover="showHint('unauthorized_client')" onmouseout="hideHint()">ℹ️</span>
-                        <a href="/authorize?error_type=access_code&error=unauthorized_client&{{../auth_params}}">unauthorized_client</a>
+                        <a href="{{authorization_path}}?error_type=access_code&error=unauthorized_client&{{../auth_params}}">unauthorized_client</a>
                     </li>
                     <li><span class="hint" onmouseover="showHint('access_denied')" onmouseout="hideHint()"> ℹ️</span> <a
-                            href="/authorize?error_type=access_code&error=access_denied&{{../auth_params}}">access_denied</a></li>
+                            href="{{authorization_path}}?error_type=access_code&error=access_denied&{{../auth_params}}">access_denied</a></li>
                     <li><span class="hint" onmouseover="showHint('unsupported_response_type')"
                             onmouseout="hideHint()">ℹ️</span> <a
-                            href="/authorize?error_type=access_code&error=unsupported_response_type&{{../auth_params}}">unsupported_response_type</a></li>
+                            href="{{authorization_path}}?error_type=access_code&error=unsupported_response_type&{{../auth_params}}">unsupported_response_type</a></li>
                     <li><span class="hint" onmouseover="showHint('invalid_scope')" onmouseout="hideHint()">ℹ️</span> <a
-                            href="/authorize?error=error_type=access_code&invalid_scope&{{../auth_params}}">invalid_scope</a></li>
+                            href="{{authorization_path}}?error=error_type=access_code&invalid_scope&{{../auth_params}}">invalid_scope</a></li>
                     <li><span class="hint" onmouseover="showHint('server_error')" onmouseout="hideHint()">ℹ️</span> <a
-                            href="/authorize?error_type=access_code&error=server_error&{{../auth_params}}">server_error</a></li>
+                            href="{{authorization_path}}?error_type=access_code&error=server_error&{{../auth_params}}">server_error</a></li>
                     <li><span class="hint" onmouseover="showHint('temporarily_unavailable')"
                             onmouseout="hideHint()">ℹ️</span> <a
-                            href="/authorize?error=temporarily_unavailable&{{../auth_params}}">temporarily_unavailable</a></li>
+                            href="{{authorization_path}}?error=temporarily_unavailable&{{../auth_params}}">temporarily_unavailable</a></li>
                 </ul>                
             </section>
             <h3>State</h3>
@@ -270,7 +270,7 @@ function hideHint() {
 
         <div id="access-token" class="tab-content" style="display: none;">
             <p>Read <a href="https://datatracker.ietf.org/doc/html/rfc6749#section-5.2">RFC-6749 5.2</a> for more information</p>
-            <form id="access-token-error" method="GET" action="/authorize">
+            <form id="access-token-error" method="GET" action="{{authorization_path}}">
                 <input type="hidden" name="error_type" value="access_token"/>
                 <div class="form-group">
                     <label for="user-select">User:</label>

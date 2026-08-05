@@ -21,25 +21,18 @@
             </tbody>
         </table>
 
-        <h2>Available Endpoints</h2>
+        <h2>Mocked provider: {{provider_name}}</h2>
 
         <div class="endpoint">
-            <h3>Login Form</h3>
-            <p><code>GET /login</code></p>
+            <h3>Authorization Endpoint</h3>
+            <p><code>GET {{authorization_path}}</code></p>
             <p>Set this endpoint as authorization URI</p>
             <p>Display all registered users with links to authorize</p>
         </div>
 
         <div class="endpoint">
-            <h3>Authorization Endpoint</h3>
-            <p><code>GET /authorize</code></p>
-            <p>Returns authorization code via redirect.</p>
-            <p>Parameters: login, response_type, client_id, redirect_uri, scope, state</p>
-        </div>
-
-        <div class="endpoint">
             <h3>Token Endpoint</h3>
-            <p><code>POST /token</code></p>
+            <p><code>POST {{token_path}}</code></p>
             <p>Set this endpoint as token URI</p>
             <p>Parameters: grant_type, code, redirect_uri, client_id, client_secret,
                 code_verifier, refresh_token</p>
@@ -47,12 +40,11 @@
 
         <div class="endpoint">
             <h3>User Info Endpoint</h3>
-            <p><code>GET /userinfo</code></p>
-            <p>Headers: Authorization: Bearer &lt;access_token&gt;</p>
+            <p><code>GET {{userinfo_path}}</code></p>
+            <p>Headers: Authorization: {{authorization_header_prefix}} &lt;access_token&gt;</p>
             <p>You can configure header's value prefix. See the application's
                 configuration</p>
         </div>
 
 {{/inline}}
 {{> base}}
-

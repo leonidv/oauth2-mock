@@ -18,6 +18,9 @@ pub enum ConfigurationError {
     NoUsers,
     AccessRestrictionEnabledWithoutCode,
     AccessRestrictionSignKeyIsTooShort,
+    OAuth2NameIsEmpty,
+    InvalidOAuth2Path { name: String, path: String },
+    DuplicateOAuth2Path(String),
 }
 
 impl std::fmt::Display for ConfigurationError {
@@ -35,6 +38,18 @@ impl std::fmt::Display for ConfigurationError {
                     f,
                     "Access restriction sign key should be greater then 64 characters"
                 )
+            }
+            ConfigurationError::OAuth2NameIsEmpty => {
+                write!(f, "OAuth2 provider name can't be empty")
+            }
+            ConfigurationError::InvalidOAuth2Path { name, path } => {
+                write!(
+                    f,
+                    "OAuth2 {name} must be an absolute path without a query or fragment: {path}"
+                )
+            }
+            ConfigurationError::DuplicateOAuth2Path(path) => {
+                write!(f, "OAuth2 endpoint paths must be unique: {path}")
             }
             ConfigurationError::BadJson(serde_err) => {
                 write!(f, "{}", serde_err)
@@ -69,10 +84,42 @@ impl From<config::ConfigError> for ConfigurationError {
     }
 }
 
+fn default_oauth2_name() -> String {
+    "Generic OAuth2".to_string()
+}
+
+fn default_authorization_path() -> String {
+    "/login".to_string()
+}
+
+fn default_token_path() -> String {
+    "/token".to_string()
+}
+
+fn default_userinfo_path() -> String {
+    "/userinfo".to_string()
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct OAuth2Configuration {
+    /// Display name of the OAuth2 provider being mocked.
+    #[serde(default = "default_oauth2_name")]
+    pub name: String,
+
     pub authorization_header_prefix: String,
+
+    /// Public authorization endpoint path.
+    #[serde(default = "default_authorization_path")]
+    pub authorization_path: String,
+
+    /// Access token endpoint path.
+    #[serde(default = "default_token_path")]
+    pub token_path: String,
+
+    /// User info endpoint path.
+    #[serde(default = "default_userinfo_path")]
+    pub userinfo_path: String,
 }
 
 /// Network server configuration
@@ -126,7 +173,7 @@ pub struct User {
 
     /// User info which will be returned by userinfo endpoint
     #[serde(rename = "userInfo")]
-    pub user_info: HashMap<String, String>,
+    pub user_info: serde_json::Map<String, serde_json::Value>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -199,6 +246,47 @@ impl ApplicationConfiguration {
     fn validate_and_finalize(&mut self, allow_no_users: bool) -> Result<(), ConfigurationError> {
         if self.users.is_empty() && !allow_no_users {
             return Err(ConfigurationError::NoUsers);
+        }
+
+        if self.oauth2.name.trim().is_empty() {
+            return Err(ConfigurationError::OAuth2NameIsEmpty);
+        }
+
+        let endpoint_paths = [
+            (
+                "authorization_path",
+                self.oauth2.authorization_path.as_str(),
+            ),
+            ("token_path", self.oauth2.token_path.as_str()),
+            ("userinfo_path", self.oauth2.userinfo_path.as_str()),
+        ];
+        const RESERVED_PATHS: [&str; 3] = ["/style.css", "/test", "/check_code"];
+        for (name, path) in endpoint_paths {
+            let conflicts_with_legacy_authorize =
+                name != "authorization_path" && path == "/authorize";
+            if path == "/"
+                || !path.starts_with('/')
+                || path.contains('?')
+                || path.contains('#')
+                || RESERVED_PATHS.contains(&path)
+                || conflicts_with_legacy_authorize
+            {
+                return Err(ConfigurationError::InvalidOAuth2Path {
+                    name: name.to_string(),
+                    path: path.to_string(),
+                });
+            }
+        }
+
+        let paths = [
+            self.oauth2.authorization_path.as_str(),
+            self.oauth2.token_path.as_str(),
+            self.oauth2.userinfo_path.as_str(),
+        ];
+        for (index, path) in paths.iter().enumerate() {
+            if paths[index + 1..].contains(path) {
+                return Err(ConfigurationError::DuplicateOAuth2Path((*path).to_string()));
+            }
         }
 
         let access_restriction = &self.access_restriction;
@@ -358,6 +446,11 @@ mod tests {
         assert_eq!(server.host, "0.0.0.0");
         assert_eq!(server.port, 3000);
 
+        assert_eq!(app_config.oauth2.name, "Generic OAuth2");
+        assert_eq!(app_config.oauth2.authorization_path, "/login");
+        assert_eq!(app_config.oauth2.token_path, "/token");
+        assert_eq!(app_config.oauth2.userinfo_path, "/userinfo");
+
         let access_restriction = &app_config.access_restriction;
         assert!(!access_restriction.enabled);
         assert_eq!(access_restriction.code, "");
@@ -505,6 +598,61 @@ mod tests {
         .unwrap();
 
         assert_eq!(config.access_restriction.code, "000123");
+    }
+
+    #[test]
+    fn oauth2_settings_can_be_overridden_from_file() {
+        let file = temporary_config(
+            r#"{
+                "oauth2": {
+                    "name": "Blitz Identity Provider",
+                    "authorization_path": "/blitz/oauth/ae",
+                    "token_path": "/blitz/oauth/te",
+                    "userinfo_path": "/blitz/oauth/me"
+                }
+            }"#,
+        );
+        let config = ApplicationConfiguration::from_file(file.path()).unwrap();
+
+        assert_eq!(config.oauth2.name, "Blitz Identity Provider");
+        assert_eq!(config.oauth2.authorization_path, "/blitz/oauth/ae");
+        assert_eq!(config.oauth2.token_path, "/blitz/oauth/te");
+        assert_eq!(config.oauth2.userinfo_path, "/blitz/oauth/me");
+    }
+
+    #[test]
+    fn oauth2_settings_can_be_overridden_from_environment() {
+        let config = load_for_test(
+            None,
+            &[
+                ("OAUTH2_MOCK_OAUTH2__NAME", "Yandex ID"),
+                ("OAUTH2_MOCK_OAUTH2__AUTHORIZATION_PATH", "/authorize"),
+                ("OAUTH2_MOCK_OAUTH2__TOKEN_PATH", "/oauth/token"),
+                ("OAUTH2_MOCK_OAUTH2__USERINFO_PATH", "/info"),
+            ],
+            &ConfigurationOverrides::default(),
+        )
+        .unwrap();
+
+        assert_eq!(config.oauth2.name, "Yandex ID");
+        assert_eq!(config.oauth2.authorization_path, "/authorize");
+        assert_eq!(config.oauth2.token_path, "/oauth/token");
+        assert_eq!(config.oauth2.userinfo_path, "/info");
+    }
+
+    #[rstest]
+    #[case(r#"{ "oauth2": { "name": "   " } }"#, "name")]
+    #[case(r#"{ "oauth2": { "token_path": "token" } }"#, "absolute path")]
+    #[case(
+        r#"{ "oauth2": { "userinfo_path": "/userinfo?format=json" } }"#,
+        "absolute path"
+    )]
+    #[case(r#"{ "oauth2": { "authorization_path": "/token" } }"#, "unique")]
+    fn invalid_oauth2_settings_are_rejected(#[case] json: &str, #[case] message: &str) {
+        let file = temporary_config(json);
+        let error = ApplicationConfiguration::from_file(file.path()).unwrap_err();
+
+        assert!(error.to_string().contains(message), "actual error: {error}");
     }
 
     #[test]
