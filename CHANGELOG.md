@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 1.4.0
 
 - Added configurable OAuth2 authorization, token, and user info endpoint paths.
 - Added a mocked provider display name to the OAuth2 configuration and welcome page.
@@ -8,6 +8,8 @@
 - Added `--host` and `--port` configuration overrides.
 - External JSON files can now be partial; nested objects are merged and arrays are replaced as a whole.
 - Unknown configuration fields are rejected to prevent silent configuration mistakes.
+
+## 1.3.0
 - The default access restriction code is now empty, so enabling access restriction requires an explicit code.
 
 ## 1.2.0
